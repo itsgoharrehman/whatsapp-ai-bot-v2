@@ -1,55 +1,13 @@
 /**
- * Cloudflare Worker — Application & Control Plane
- * Hosts: Frontend, Authentication, User DB, Settings, Encrypted BYOK, Admin Console, and Gateway to Alwaysdata.
+ * Cloudflare Worker — Application & Control Plane Gateway
+ * Hosts: Frontend Assets via Cloudflare Edge, Secure API Gateway to Alwaysdata Runtime.
  * ZERO Baileys imports.
  */
-
-async function hmacSha256(key, message) {
-  const encoder = new TextEncoder();
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(key),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(message));
-  return Array.from(new Uint8Array(signature)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function normalizeBody(body, method = 'GET') {
-  if (method && ['GET', 'HEAD', 'DELETE'].includes(method.toUpperCase()) && (!body || (typeof body === 'object' && Object.keys(body).length === 0))) {
-    return '';
-  }
-  if (!body) return '';
-  if (typeof body === 'object') {
-    if (Object.keys(body).length === 0) return '';
-    return JSON.stringify(body);
-  }
-  return String(body);
-}
-
-async function createSignedHeaders(secret, method, path, body = '') {
-  const timestamp = Date.now().toString();
-  const nonce = crypto.randomUUID().replace(/-/g, '');
-  const normBody = normalizeBody(body, method);
-  const canonicalString = `${method.toUpperCase()}|${path}|${timestamp}|${nonce}|${normBody}`;
-  const signature = await hmacSha256(secret, canonicalString);
-
-  return {
-    'x-internal-key': secret,
-    'x-internal-timestamp': timestamp,
-    'x-internal-nonce': nonce,
-    'x-internal-signature': signature,
-    'Content-Type': 'application/json'
-  };
-}
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const alwaysdataUrl = (env.ALWAYSDATA_BASE_URL || '').replace(/\/+$/, '');
-    const internalSecret = env.INTERNAL_API_KEY || 'default-internal-service-secret-2026';
+    const alwaysdataUrl = (env.ALWAYSDATA_BASE_URL || 'https://goharrehman.alwaysdata.net').replace(/\/+$/, '');
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
@@ -57,76 +15,78 @@ export default {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+          'Access-Control-Max-Age': '86400'
         }
       });
     }
 
-    // Forwarding WhatsApp runtime & control requests to Alwaysdata
-    if (url.pathname.startsWith('/api/control/') || url.pathname === '/api/status' || url.pathname.startsWith('/api/logs')) {
-      const authHeader = request.headers.get('Authorization') || '';
-      if (!authHeader.startsWith('Bearer ')) {
-        return new Response(JSON.stringify({ error: 'Authentication required' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
+    // API Gateway routing -> Alwaysdata Backend
+    if (url.pathname.startsWith('/api/')) {
+      const targetUrl = `${alwaysdataUrl}${url.pathname}${url.search}`;
+      
+      const forwardHeaders = new Headers(request.headers);
+      forwardHeaders.set('Host', new URL(alwaysdataUrl).host);
+      forwardHeaders.set('X-Forwarded-Host', url.host);
+      forwardHeaders.set('X-Forwarded-Proto', 'https');
+
+      // Special handling for SSE Log Streams
+      if (url.pathname === '/api/logs/stream') {
+        const response = await fetch(targetUrl, {
+          method: 'GET',
+          headers: forwardHeaders
+        });
+        return new Response(response.body, {
+          status: response.status,
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+          }
         });
       }
 
-      const token = authHeader.substring(7).trim();
-      // Resolve user from KV or internal DB session
-      let userId = 'user_gohar'; // Default or resolved from KV
-      if (env.USERS_KV) {
-        const sessionStr = await env.USERS_KV.get(`session:${token}`);
-        if (sessionStr) {
-          const s = JSON.parse(sessionStr);
-          userId = s.userId;
-        } else {
-          return new Response(JSON.stringify({ error: 'Invalid session' }), {
-            status: 401,
-            headers: { 'Content-Type': 'application/json' }
-          });
-        }
+      // Forward request to Alwaysdata
+      const init = {
+        method: request.method,
+        headers: forwardHeaders
+      };
+
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method.toUpperCase())) {
+        init.body = request.body;
       }
 
-      let targetInternalPath = '';
-      let targetMethod = request.method;
-      let requestBody = null;
-
-      if (url.pathname === '/api/status') {
-        targetInternalPath = `/internal/status/${userId}`;
-        targetMethod = 'GET';
-      } else if (url.pathname === '/api/control/start') {
-        targetInternalPath = `/internal/control/${userId}/start`;
-        targetMethod = 'POST';
-      } else if (url.pathname === '/api/control/stop') {
-        targetInternalPath = `/internal/control/${userId}/stop`;
-        targetMethod = 'POST';
-      } else if (url.pathname === '/api/control/reset_session') {
-        targetInternalPath = `/internal/control/${userId}/reset`;
-        targetMethod = 'POST';
-      } else if (url.pathname === '/api/logs') {
-        targetInternalPath = `/internal/logs/${userId}`;
-        targetMethod = 'GET';
-      } else if (url.pathname === '/api/logs/stream') {
-        targetInternalPath = `/internal/logs/stream/${userId}`;
-        targetMethod = 'GET';
-      }
-
-      if (targetInternalPath && alwaysdataUrl) {
-        const signedHeaders = await createSignedHeaders(internalSecret, targetMethod, targetInternalPath, requestBody);
-        const targetUrl = `${alwaysdataUrl}${targetInternalPath}`;
-
-        return fetch(targetUrl, {
-          method: targetMethod,
-          headers: signedHeaders,
-          body: requestBody ? JSON.stringify(requestBody) : undefined
+      try {
+        const response = await fetch(targetUrl, init);
+        const resHeaders = new Headers(response.headers);
+        resHeaders.set('Access-Control-Allow-Origin', '*');
+        return new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: resHeaders
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: `Gateway Error: ${err.message}` }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
       }
     }
 
-    // Default static or API response
-    return new Response(JSON.stringify({ message: 'Cloudflare Control Plane Operational' }), {
-      headers: { 'Content-Type': 'application/json' }
+    // Serve Static Assets (frontend HTML, CSS, JS) via Cloudflare Assets
+    if (env.ASSETS) {
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse.status !== 404) {
+        return assetResponse;
+      }
+      // SPA Fallback to index.html
+      const fallbackUrl = new URL('/index.html', request.url);
+      return env.ASSETS.fetch(new Request(fallbackUrl, request));
+    }
+
+    return new Response('Cloudflare Control Plane Gateway Active', {
+      headers: { 'Content-Type': 'text/plain' }
     });
   }
 };

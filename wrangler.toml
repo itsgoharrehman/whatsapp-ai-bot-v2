@@ -8,6 +8,4 @@ directory = "./frontend"
 binding = "ASSETS"
 
 [vars]
-ALWAYSDATA_BASE_URL = "https://your-account.alwaysdata.net"
-INTERNAL_API_KEY = "set-your-secure-internal-api-key"
-ENCRYPTION_SECRET = "set-your-secure-encryption-secret-min-16-chars"
+ALWAYSDATA_BASE_URL = "https://goharrehman.alwaysdata.net"

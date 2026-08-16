@@ -121,13 +121,24 @@ export class AIProviderManager {
       return { route: 'simple', confidence: 1.0, routerModel: config.routerModel };
     }
 
-    // Fast-path: strip @mark, @number triggers and test for standard opening greetings
+    // Fast-path: strip tenant @tag, @username, @number triggers and test for standard opening greetings
     const botPhoneNum = this.getOwnerNumber();
-    let strippedPrompt = (prompt || '').trim()
-      .replace(/^(@mark\s+zuckerberg|@mark|@zuck|mark\s+zuckerberg|mark)\s*[:,\-]?\s*/i, '')
-      .replace(new RegExp(`^@${botPhoneNum}\\s*[:,\\-]?\\s*`, 'i'), '')
-      .replace(/\s*(@mark\s+zuckerberg|@mark|@zuck)$/i, '')
-      .trim();
+    const userSettings = this.inMemorySettings || db.getUserSettings(this.userId) || {};
+    const userRec = db.getUser(this.userId);
+    const botUsername = (userRec?.username || '').toLowerCase();
+    const botTag = (userSettings?.botTag || botUsername || '').toLowerCase().replace(/^@+/, '');
+
+    let strippedPrompt = (prompt || '').trim();
+    if (botTag) {
+      strippedPrompt = strippedPrompt.replace(new RegExp(`^@?${botTag}\\s*[:,\\-]?\\s*`, 'i'), '');
+    }
+    if (botUsername && botUsername !== botTag) {
+      strippedPrompt = strippedPrompt.replace(new RegExp(`^@?${botUsername}\\s*[:,\\-]?\\s*`, 'i'), '');
+    }
+    if (botPhoneNum) {
+      strippedPrompt = strippedPrompt.replace(new RegExp(`^@?${botPhoneNum}\\s*[:,\\-]?\\s*`, 'i'), '');
+    }
+    strippedPrompt = strippedPrompt.trim();
 
     const cleanLower = (strippedPrompt || prompt).trim().toLowerCase();
     if (!cleanLower || /^(salam|assalam|assalamu\s+alaikum|aoa|hi|hello|hey|hola|kya haal|kaise ho|who are you|help)$/i.test(cleanLower)) {

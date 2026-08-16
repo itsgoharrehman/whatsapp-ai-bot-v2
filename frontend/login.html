@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sign In — WhatsApp AI Assistant">
+  <title>Sign In — WhatsApp AI</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-body-page">
+
+  <div class="login-wrapper">
+    <div class="login-card">
+      <div class="login-header">
+        <h1 class="brand-title">WA Bot Assistant</h1>
+        <p class="brand-subtitle">Multi-Tenant AI WhatsApp Platform</p>
+      </div>
+
+      <form id="loginForm" class="login-form">
+        <div id="loginError" class="feedback err" role="alert" style="display: none;"></div>
+
+        <div class="field-group">
+          <label class="input-label" for="username">Username</label>
+          <input class="input" id="username" type="text" name="username" autocomplete="username" required placeholder="Enter username" autofocus>
+        </div>
+
+        <div class="field-group">
+          <label class="input-label" for="password">Password</label>
+          <input class="input" id="password" type="password" name="password" autocomplete="current-password" required placeholder="Enter password">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block" id="loginBtn">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const token = localStorage.getItem('session_token');
+      // If already logged in, check session and redirect
+      if (token) {
+        fetch('/api/auth/me', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        }).then(r => {
+          if (r.ok) window.location.href = 'index.html';
+        }).catch(() => {});
+      }
+
+      const form = document.getElementById('loginForm');
+      const errBox = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+        btn.disabled = true;
+        btn.textContent = 'Signing in...';
+
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value;
+
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+
+          const data = await res.json();
+          if (!res.ok || data.error) {
+            throw new Error(data.error || 'Invalid credentials');
+          }
+
+          if (data.token) {
+            localStorage.setItem('session_token', data.token);
+          }
+          if (data.user) {
+            localStorage.setItem('user_data', JSON.stringify(data.user));
+          }
+
+          window.location.href = 'index.html';
+        } catch (err) {
+          errBox.textContent = err.message || 'Login failed';
+          errBox.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'Sign In';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

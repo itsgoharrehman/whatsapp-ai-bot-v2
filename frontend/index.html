@@ -9,25 +9,6 @@
 </head>
 <body>
 
-  <!-- ===== LOGIN MODAL ===== -->
-  <div id="loginModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Sign in">
-    <div class="modal-panel">
-      <h2>Sign in</h2>
-      <form id="loginForm" autocomplete="on">
-        <div class="field-group">
-          <label class="input-label" for="loginUsername">Username</label>
-          <input class="input" id="loginUsername" type="text" name="username" autocomplete="username" required>
-        </div>
-        <div class="field-group">
-          <label class="input-label" for="loginPassword">Password</label>
-          <input class="input" id="loginPassword" type="password" name="password" autocomplete="current-password" required>
-        </div>
-        <div id="loginError" class="login-error" role="alert" aria-live="polite"></div>
-        <button type="submit" class="btn btn-primary" style="width:100%" id="loginBtn">Sign in</button>
-      </form>
-    </div>
-  </div>
-
   <!-- ===== SETTINGS MODAL ===== -->
   <div id="settingsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="settings-panel">
@@ -44,6 +25,10 @@
         <div class="field-group">
           <label class="input-label" for="inputOwnerNumber">Authorized Owner Number</label>
           <input class="input" id="inputOwnerNumber" type="text" name="owner_number" placeholder="+1234567890">
+        </div>
+        <div class="field-group">
+          <label class="input-label" for="inputBotTag">Bot Wake Tag (e.g. @bot, @gohar)</label>
+          <input class="input" id="inputBotTag" type="text" name="bot_tag" placeholder="@mybot or @username">
         </div>
         <div class="field-group">
           <label class="input-label" for="inputNvidiaKeys">NVIDIA API Keys (comma-separated)</label>
@@ -68,18 +53,6 @@
     </div>
   </div>
 
-  <!-- ===== MOBILE DRAWER ===== -->
-  <div id="mobileMenu" class="mobile-overlay" aria-hidden="true">
-    <div class="mobile-drawer" role="navigation" aria-label="Mobile navigation">
-      <button type="button" class="btn btn-sm drawer-close" id="drawerClose" aria-label="Close menu">Close</button>
-      <button type="button" class="btn" id="mobileSettingsBtn">Settings</button>
-      <button type="button" class="btn hidden" id="mobileAdminBtn">Admin</button>
-      <div class="divider"></div>
-      <div class="drawer-spacer"></div>
-      <button type="button" class="btn danger-link" id="mobileSignOutBtn" style="color:var(--danger);border-color:var(--danger)">Sign out</button>
-    </div>
-  </div>
-
   <!-- ===== TOP BAR ===== -->
   <header class="topbar" role="banner">
     <div class="topbar-brand">
@@ -97,9 +70,17 @@
         <a href="admin.html" class="btn btn-sm hidden" id="adminLink">Admin</a>
         <button type="button" class="btn btn-sm" id="signOutBtn" style="color:var(--danger)">Sign out</button>
       </nav>
-      <button type="button" class="hamburger btn btn-sm" id="hamburgerBtn" aria-label="Open menu" aria-expanded="false">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="1.5"/><rect y="7" width="16" height="1.5"/><rect y="12" width="16" height="1.5"/></svg>
-      </button>
+      <div class="mobile-nav-container">
+        <button type="button" class="hamburger btn btn-sm" id="hamburgerBtn" aria-label="Open menu" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="1.5"/><rect y="7" width="16" height="1.5"/><rect y="12" width="16" height="1.5"/></svg>
+        </button>
+        <div id="mobileMenu" class="mobile-popup hidden" role="menu">
+          <button type="button" class="menu-item" id="mobileSettingsBtn">Settings</button>
+          <a href="admin.html" class="menu-item hidden" id="mobileAdminBtn">Admin</a>
+          <div class="divider"></div>
+          <button type="button" class="menu-item danger-text" id="mobileSignOutBtn">Sign out</button>
+        </div>
+      </div>
     </div>
   </header>
 

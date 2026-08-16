@@ -202,16 +202,19 @@ assert.strictEqual(strippedThink.includes('<think>'), false);
 console.log('✔ Test 13 passed: Artificial <think> tags are stripped completely');
 
 // =========================================================================
-// Test 14: Trigger Rules (@mark, @number, quote to bot)
+// Test 14: Trigger Rules (@botTag, @username, @number, quote to bot)
 // =========================================================================
 const mockBotJid = '92323852260@s.whatsapp.net';
 const mockBotLid = '107559570657320@lid';
 
-const msgWithMark = { message: { conversation: 'Hey @mark how does this work?' } };
-assert.strictEqual(permissionChecker.isBotMentionedInGroup(msgWithMark, mockBotJid, mockBotLid, 'Hey @mark how does this work?'), true);
+const msgWithUsername = { message: { conversation: 'Hey @alice_test how does this work?' } };
+assert.strictEqual(permissionChecker.isBotMentionedInGroup(msgWithUsername, mockBotJid, mockBotLid, 'Hey @alice_test how does this work?', '@mybot', 'alice_test'), true);
+
+const msgWithTag = { message: { conversation: 'Hey @mybot can you help?' } };
+assert.strictEqual(permissionChecker.isBotMentionedInGroup(msgWithTag, mockBotJid, mockBotLid, 'Hey @mybot can you help?', '@mybot', 'alice_test'), true);
 
 const msgWithNum = { message: { conversation: 'Hey @92323852260 check this' } };
-assert.strictEqual(permissionChecker.isBotMentionedInGroup(msgWithNum, mockBotJid, mockBotLid, 'Hey @92323852260 check this'), true);
+assert.strictEqual(permissionChecker.isBotMentionedInGroup(msgWithNum, mockBotJid, mockBotLid, 'Hey @92323852260 check this', '@mybot', 'alice_test'), true);
 
 const msgQuoteBot = {
   message: {
@@ -221,8 +224,8 @@ const msgQuoteBot = {
     }
   }
 };
-assert.strictEqual(permissionChecker.isBotMentionedInGroup(msgQuoteBot, mockBotJid, mockBotLid, 'What do you mean?'), true);
-console.log('✔ Test 14 passed: Group trigger rules (@mark, @number, quote to bot) verified');
+assert.strictEqual(permissionChecker.isBotMentionedInGroup(msgQuoteBot, mockBotJid, mockBotLid, 'What do you mean?', '@mybot', 'alice_test'), true);
+console.log('✔ Test 14 passed: Group trigger rules (@botTag, @username, @number, quote to bot) verified');
 
 // =========================================================================
 // Test 15: Media Type Detection & Multimodal Packaging

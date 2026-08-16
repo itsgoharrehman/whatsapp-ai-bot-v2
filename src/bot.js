@@ -9,7 +9,7 @@ import { AIProviderManager } from './ai/provider.js';
 import permissionChecker from './utils/permissionChecker.js';
 import adminCommands from './commands/admin.js';
 
-let makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, QRCode, pino;
+let makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, Browsers, QRCode, pino;
 
 try {
   const baileys = await import('@whiskeysockets/baileys');
@@ -18,6 +18,7 @@ try {
   DisconnectReason = baileys.DisconnectReason;
   fetchLatestBaileysVersion = baileys.fetchLatestBaileysVersion;
   downloadMediaMessage = baileys.downloadMediaMessage;
+  Browsers = baileys.Browsers;
 
   QRCode = (await import('qrcode')).default;
   pino = (await import('pino')).default;
@@ -120,7 +121,10 @@ export class UserBotSession extends EventEmitter {
         version,
         auth: state,
         logger: pino({ level: 'silent' }),
-        browser: ['Mark Zuckerberg', 'Chrome', '1.0.0']
+        browser: Browsers ? Browsers.ubuntu('Chrome') : ['Ubuntu', 'Chrome', '20.0.04'],
+        printQRInTerminal: false,
+        syncFullHistory: false,
+        generateHighQualityLinkPreview: false
       });
 
       this.sock.ev.on('creds.update', saveCreds);
@@ -149,12 +153,19 @@ export class UserBotSession extends EventEmitter {
         }
 
         if (connection === 'close') {
+          const statusCode = lastDisconnect?.error?.output?.statusCode;
+          const isLoggedOut = statusCode === DisconnectReason?.loggedOut;
+          
+          this.userLogger.warn(`[SYSTEM] WhatsApp connection closed (Status code: ${statusCode || 'unknown'}). Reconnecting: ${!isLoggedOut}`);
           this.qrCodeDataUrl = null;
           this.status = 'DISCONNECTED';
           this.emit('status', this.status);
-          if (!this.isStopping) {
+
+          if (!this.isStopping && !isLoggedOut) {
             if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            this.reconnectTimer = setTimeout(() => this.start(), 5000);
+            // Instant 1.5s reconnect for 515 (restartRequired) handshake
+            const delay = statusCode === 515 ? 1000 : 3000;
+            this.reconnectTimer = setTimeout(() => this.start(false), delay);
           }
         }
       });
@@ -264,11 +275,18 @@ export class UserBotSession extends EventEmitter {
       }
 
       const botPhoneNum = permissionChecker.normalizeJid(this.botJid) || permissionChecker.normalizeJid(this.getOwnerNumber());
+      const userRec = db.getUser(this.userId);
+      const userSettings = db.getUserSettings(this.userId);
+      const botUsername = (userRec?.username || '').toLowerCase();
+      const botTag = (userSettings?.botTag || botUsername || '').toLowerCase().replace(/^@+/, '');
 
-      // DM Self-Chat Rule: Only reply if explicitly triggered with @mark or @<botPhoneNum>
+      // DM Self-Chat Rule: Only reply if explicitly triggered with @<botTag>, @<username>, or @<botPhoneNum>
       if (!isGroup && isFromMe) {
         const cleanMsg = messageText.toLowerCase();
-        const hasExplicitTrigger = cleanMsg.includes('@mark') || (botPhoneNum && cleanMsg.includes(`@${botPhoneNum}`));
+        const hasExplicitTrigger =
+          (botTag && (cleanMsg.includes(`@${botTag}`) || cleanMsg.startsWith(`${botTag} `) || cleanMsg === botTag)) ||
+          (botUsername && (cleanMsg.includes(`@${botUsername}`) || cleanMsg.startsWith(`${botUsername} `) || cleanMsg === botUsername)) ||
+          (botPhoneNum && cleanMsg.includes(`@${botPhoneNum}`));
         if (!hasExplicitTrigger) {
           return;
         }
@@ -276,7 +294,7 @@ export class UserBotSession extends EventEmitter {
 
       // Group Message Trigger Logic
       if (isGroup) {
-        const isMentioned = permissionChecker.isBotMentionedInGroup(m, this.botJid, this.botLid, messageText);
+        const isMentioned = permissionChecker.isBotMentionedInGroup(m, this.botJid, this.botLid, messageText, botTag, botUsername);
         if (!isMentioned) return;
 
         const canWrite = await permissionChecker.hasGroupWritePermission(this.sock, chatJid, this.botJid);

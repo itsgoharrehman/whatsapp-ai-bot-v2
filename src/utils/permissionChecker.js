@@ -78,13 +78,10 @@ export default {
     return this.extractMessageText(quotedUnwrapped);
   },
 
-  isBotMentionedInGroup(rawMessage, botJid, botLid, messageTextArg) {
-    let messageText = typeof messageTextArg === 'string' ? messageTextArg : '';
-
-    const unwrapped = this.unwrapMessage(rawMessage);
-    if (!unwrapped) return false;
-
-    const botPhoneNum = this.normalizeJid(botJid) || this.normalizeJid(config.ownerNumber);
+  isBotMentionedInGroup(msg, botJid, botLid = null, messageText = '', customBotTag = null, username = null) {
+    if (!msg) return false;
+    const unwrapped = this.unwrapMessage(msg);
+    const botPhoneNum = this.normalizeJid(botJid);
     const botLidNum = this.normalizeJid(botLid);
 
     const contextInfo =
@@ -120,15 +117,15 @@ export default {
       }
     }
 
-    // 2. Check text-based tags / mentions (@mark, @mark zuckerberg, @zuck, @<botNumber>)
+    // 3. Check tenant-specific text tags: @<botNumber>, @<username>, @<customBotTag>
     if (messageText) {
       const cleanText = messageText.toLowerCase().trim();
+      const tag = customBotTag ? customBotTag.toLowerCase().replace(/^@+/, '').trim() : '';
+      const uname = username ? username.toLowerCase().replace(/^@+/, '').trim() : '';
+
       if (
-        cleanText.includes('@mark') ||
-        cleanText.includes('@mark zuckerberg') ||
-        cleanText.includes('@zuck') ||
-        cleanText.startsWith('mark ') ||
-        cleanText === 'mark' ||
+        (tag && (cleanText.includes(`@${tag}`) || cleanText.startsWith(`${tag} `) || cleanText === tag)) ||
+        (uname && (cleanText.includes(`@${uname}`) || cleanText.startsWith(`${uname} `) || cleanText === uname)) ||
         (botPhoneNum && cleanText.includes(`@${botPhoneNum}`)) ||
         (botLidNum && cleanText.includes(`@${botLidNum}`))
       ) {

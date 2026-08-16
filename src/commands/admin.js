@@ -61,7 +61,7 @@ export default {
     const args = parts.slice(1);
 
     if (cmd === '/help') {
-      return `🤖 *Mark Zuckerberg Assistant Menu*
+      return `🤖 *AI Assistant Menu*
 ────────────────────────
 • */status* : System metrics & active models
 • */models* : Full model & fallback architecture
@@ -79,7 +79,7 @@ export default {
       const activeDetails = statusInfo[statusInfo.activeProvider] || statusInfo.groq;
       const mem = Math.round(process.memoryUsage().rss / 1024 / 1024);
 
-      return `📊 *Mark Zuckerberg Assistant Status*
+      return `📊 *AI Assistant Status*
 ────────────────────────
 • *Status* : ONLINE
 • *Uptime* : ${this.formatUptime()}

@@ -2,211 +2,232 @@
 (function () {
   'use strict';
 
-  /* ----- DOM refs ----- */
   const $ = (id) => document.getElementById(id);
 
   const dom = {
-    adminMobileMenu:     $('adminMobileMenu'),
-    adminHamburgerBtn:   $('adminHamburgerBtn'),
-    adminDrawerClose:    $('adminDrawerClose'),
+    adminMobileMenu:       $('adminMobileMenu'),
+    adminHamburgerBtn:     $('adminHamburgerBtn'),
+    adminDrawerClose:      $('adminDrawerClose'),
     adminMobileSignOutBtn: $('adminMobileSignOutBtn'),
-    adminSignOutBtn:     $('adminSignOutBtn'),
+    adminSignOutBtn:       $('adminSignOutBtn'),
 
-    tenantListBody:      $('tenantListBody'),
-    createUserForm:      $('createUserForm'),
-    newUsername:         $('newUsername'),
-    newPassword:         $('newPassword'),
-    newRole:             $('newRole'),
-    newOwnerNumber:      $('newOwnerNumber'),
-    newDefaultProvider:  $('newDefaultProvider'),
-    btnCreateUser:       $('btnCreateUser'),
-    btnCancelCreate:     $('btnCancelCreate'),
-    createUserError:     $('createUserError'),
+    tenantListBody:        $('tenantListBody'),
+    createUserForm:        $('createUserForm'),
+    newUsername:           $('newUsername'),
+    newPassword:           $('newPassword'),
+    newRole:               $('newRole'),
+    newOwnerNumber:        $('newOwnerNumber'),
+    newDefaultProvider:    $('newDefaultProvider'),
+    btnCreateUser:         $('btnCreateUser'),
+    btnCancelCreate:       $('btnCancelCreate'),
+    createUserError:       $('createUserError'),
   };
 
-  /* ----- State ----- */
-  let demoMode = false;
-
-  /* ----- API base ----- */
-  const API = '';
-
-  /* ----- Helpers ----- */
-  function fetchJSON(url, options) {
-    return fetch(API + url, {
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      credentials: 'same-origin',
-      ...options,
-    }).then(function (r) {
-      if (r.status === 401) { window.location.href = 'index.html'; throw new Error('Unauthorized'); }
-      if (!r.ok) throw new Error('Request failed: ' + r.status);
-      return r.json();
-    });
+  function getToken() {
+    return localStorage.getItem('session_token') || '';
   }
 
-  /* ----- Auth ----- */
+  function getHeaders() {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    const token = getToken();
+    if (token) {
+      headers['Authorization'] = 'Bearer ' + token;
+    }
+    return headers;
+  }
+
+  async function apiFetch(url, options = {}) {
+    const res = await fetch(url, {
+      ...options,
+      headers: { ...getHeaders(), ...(options.headers || {}) },
+      credentials: 'same-origin'
+    });
+    if (res.status === 401 || res.status === 403) {
+      window.location.href = 'index.html';
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  /* ----- Auth Guard ----- */
   async function checkAuth() {
     try {
-      const data = await fetchJSON('/api/auth/me');
-      if (data.role !== 'admin') { window.location.href = 'index.html'; }
-    } catch {
-      window.location.href = 'index.html';
+      const data = await apiFetch('/api/auth/me');
+      const user = data.user || data;
+      if (user.role !== 'admin' && user.is_admin !== true) {
+        window.location.href = 'index.html';
+        return;
+      }
+      loadUsers();
+    } catch (_) {
+      window.location.href = 'login.html';
     }
   }
 
   async function doSignOut() {
-    try { await fetchJSON('/api/auth/logout', { method: 'POST' }); } catch {}
-    window.location.href = 'index.html';
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    localStorage.removeItem('session_token');
+    localStorage.removeItem('user_data');
+    window.location.href = 'login.html';
   }
 
-  /* ----- Mobile Menu ----- */
-  function openMobileMenu() {
-    dom.adminMobileMenu.classList.add('open');
-    dom.adminMobileMenu.setAttribute('aria-hidden', 'false');
-    dom.adminHamburgerBtn.setAttribute('aria-expanded', 'true');
+  /* ----- Mobile Navigation Popup ----- */
+  function toggleMobileMenu(e) {
+    if (e) e.stopPropagation();
+    if (!dom.adminMobileMenu) return;
+    const isHidden = dom.adminMobileMenu.classList.contains('hidden');
+    if (isHidden) {
+      dom.adminMobileMenu.classList.remove('hidden');
+      if (dom.adminHamburgerBtn) dom.adminHamburgerBtn.setAttribute('aria-expanded', 'true');
+    } else {
+      closeMobileMenu();
+    }
   }
 
   function closeMobileMenu() {
-    dom.adminMobileMenu.classList.remove('open');
-    dom.adminMobileMenu.setAttribute('aria-hidden', 'true');
-    dom.adminHamburgerBtn.setAttribute('aria-expanded', 'false');
+    if (dom.adminMobileMenu) dom.adminMobileMenu.classList.add('hidden');
+    if (dom.adminHamburgerBtn) dom.adminHamburgerBtn.setAttribute('aria-expanded', 'false');
   }
 
-  /* ----- Tenant User List ----- */
+  /* ----- User List Management ----- */
   async function loadUsers() {
     try {
-      const data = await fetchJSON('/api/admin/users');
+      const data = await apiFetch('/api/admin/users');
       renderUsers(data.users || []);
-    } catch {
-      if (!demoMode) renderUsers([]);
+    } catch (_) {
+      renderUsers([]);
     }
   }
 
   function renderUsers(users) {
+    if (!dom.tenantListBody) return;
     dom.tenantListBody.innerHTML = '';
-    if (!users.length) {
-      var tr = document.createElement('tr');
-      var td = document.createElement('td');
-      td.colSpan = 5;
-      td.style.color = 'var(--text-3)';
-      td.style.textAlign = 'center';
-      td.style.padding = '20px 10px';
-      td.textContent = 'No tenant users found';
-      tr.appendChild(td);
+
+    if (!users || users.length === 0) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td colspan="6" style="text-align:center;color:var(--text-3);padding:20px;">No tenant users found</td>';
       dom.tenantListBody.appendChild(tr);
       return;
     }
-    users.forEach(function (u) {
-      var tr = document.createElement('tr');
-      tr.innerHTML =
-        '<td>' + esc(u.username) + '</td>' +
-        '<td>' + esc(u.role) + '</td>' +
-        '<td>' + esc(u.owner_number || '—') + '</td>' +
-        '<td>' + esc(u.default_provider || '—') + '</td>' +
-        '<td><span class="badge' + (u.active ? ' green' : ' danger') + '">' + (u.active ? 'Active' : 'Inactive') + '</span></td>';
+
+    users.forEach((u) => {
+      const tr = document.createElement('tr');
+      const isActive = u.enabled !== false;
+      const role = u.role || 'user';
+      const botStatus = u.botStatus || 'DISCONNECTED';
+
+      tr.innerHTML = `
+        <td><strong>${esc(u.username)}</strong></td>
+        <td><span class="badge ${role === 'admin' ? 'green' : ''}">${esc(role)}</span></td>
+        <td>${esc(u.owner_number || u.ownerNumber || '—')}</td>
+        <td>${esc(u.default_provider || u.provider || 'nvidia')}</td>
+        <td><span class="badge ${botStatus === 'CONNECTED' ? 'green' : ''}">${esc(botStatus)}</span></td>
+        <td style="text-align:right;">
+          <button class="btn btn-sm btn-danger btn-delete-user" data-id="${esc(u.id || u.username)}" data-name="${esc(u.username)}">Remove</button>
+        </td>
+      `;
       dom.tenantListBody.appendChild(tr);
+    });
+
+    // Bind remove buttons
+    dom.tenantListBody.querySelectorAll('.btn-delete-user').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const userId = btn.dataset.id;
+        const name = btn.dataset.name;
+        if (!confirm(`Are you sure you want to delete user '${name}'?`)) return;
+        try {
+          await apiFetch(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+          loadUsers();
+        } catch (err) {
+          alert(`Failed to delete user: ${err.message}`);
+        }
+      });
     });
   }
 
   function esc(s) {
-    var d = document.createElement('span');
-    d.textContent = s;
+    if (s === null || s === undefined) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
     return d.innerHTML;
   }
 
   /* ----- Create User ----- */
   async function createUser(e) {
     e.preventDefault();
-    dom.createUserError.textContent = '';
-    var payload = {
-      username: dom.newUsername.value.trim(),
-      password: dom.newPassword.value,
-      role: dom.newRole.value,
-      owner_number: dom.newOwnerNumber.value.trim(),
-      default_provider: dom.newDefaultProvider.value,
-    };
-    if (!payload.username || !payload.password) {
-      dom.createUserError.textContent = 'Username and password are required';
+    if (dom.createUserError) dom.createUserError.textContent = '';
+
+    const username = dom.newUsername ? dom.newUsername.value.trim() : '';
+    const password = dom.newPassword ? dom.newPassword.value : '';
+    const role = dom.newRole ? dom.newRole.value : 'user';
+    const ownerNumber = dom.newOwnerNumber ? dom.newOwnerNumber.value.trim() : '';
+    const defaultProvider = dom.newDefaultProvider ? dom.newDefaultProvider.value : 'nvidia';
+
+    if (!username || !password) {
+      if (dom.createUserError) dom.createUserError.textContent = 'Username and password are required';
       return;
     }
+
+    if (dom.btnCreateUser) dom.btnCreateUser.disabled = true;
+
     try {
-      await fetchJSON('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) });
-      dom.createUserForm.reset();
+      await apiFetch('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          username,
+          password,
+          role,
+          owner_number: ownerNumber,
+          default_provider: defaultProvider
+        })
+      });
+
+      if (dom.createUserForm) dom.createUserForm.reset();
       loadUsers();
-    } catch {
-      dom.createUserError.textContent = 'Failed to create user';
+    } catch (err) {
+      if (dom.createUserError) dom.createUserError.textContent = 'Failed to create user. The username may already exist.';
+    } finally {
+      if (dom.btnCreateUser) dom.btnCreateUser.disabled = false;
     }
   }
 
   function cancelCreate() {
-    dom.createUserForm.reset();
-    dom.createUserError.textContent = '';
+    if (dom.createUserForm) dom.createUserForm.reset();
+    if (dom.createUserError) dom.createUserError.textContent = '';
   }
 
-  /* ----- Event Bindings ----- */
-  dom.adminSignOutBtn.addEventListener('click', doSignOut);
-  dom.adminMobileSignOutBtn.addEventListener('click', doSignOut);
-  dom.adminHamburgerBtn.addEventListener('click', openMobileMenu);
-  dom.adminDrawerClose.addEventListener('click', closeMobileMenu);
-  dom.adminMobileMenu.addEventListener('click', function (e) {
-    if (e.target === dom.adminMobileMenu) closeMobileMenu();
-  });
+  /* ----- Event Listeners ----- */
+  function bindEvents() {
+    if (dom.adminSignOutBtn) dom.adminSignOutBtn.addEventListener('click', doSignOut);
+    if (dom.adminMobileSignOutBtn) dom.adminMobileSignOutBtn.addEventListener('click', () => { closeMobileMenu(); doSignOut(); });
 
-  dom.createUserForm.addEventListener('submit', createUser);
-  dom.btnCancelCreate.addEventListener('click', cancelCreate);
+    if (dom.adminHamburgerBtn) dom.adminHamburgerBtn.addEventListener('click', toggleMobileMenu);
 
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && dom.adminMobileMenu.classList.contains('open')) closeMobileMenu();
-  });
-
-  /* ----- Demo Mode ----- */
-  var demoUsers = [
-    { username: 'admin', role: 'admin', owner_number: '+1 555-0100', default_provider: 'auto', active: true },
-    { username: 'operator1', role: 'user', owner_number: '+1 555-0142', default_provider: 'nvidia_nim', active: true },
-    { username: 'operator2', role: 'user', owner_number: '+44 7700 900123', default_provider: 'groq', active: true },
-    { username: 'operator3', role: 'user', owner_number: '+91 98765 43210', default_provider: 'auto', active: false },
-  ];
-
-  function enableDemoMode() {
-    demoMode = true;
-    renderUsers(demoUsers);
-  }
-
-  /* Demo create user override */
-  dom.createUserForm.addEventListener('submit', function (e) {
-    if (demoMode) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      dom.createUserError.textContent = '';
-      var uname = dom.newUsername.value.trim();
-      var pwd = dom.newPassword.value;
-      if (!uname || !pwd) { dom.createUserError.textContent = 'Username and password are required'; return; }
-      demoUsers.push({
-        username: uname,
-        role: dom.newRole.value,
-        owner_number: dom.newOwnerNumber.value.trim() || '—',
-        default_provider: dom.newDefaultProvider.value,
-        active: true,
-      });
-      renderUsers(demoUsers);
-      dom.createUserForm.reset();
-    }
-  }, true);
-
-  /* ----- Init ----- */
-  function init() {
-    fetch(API + '/api/auth/me', { credentials: 'same-origin' }).then(function (r) {
-      if (r.ok) {
-        r.json().then(function (data) {
-          if (data.role !== 'admin') window.location.href = 'index.html';
-        });
-        loadUsers();
-      } else {
-        enableDemoMode();
+    document.addEventListener('click', (e) => {
+      if (dom.adminMobileMenu && !dom.adminMobileMenu.contains(e.target) && e.target !== dom.adminHamburgerBtn && !dom.adminHamburgerBtn.contains(e.target)) {
+        closeMobileMenu();
       }
-    }).catch(function () {
-      enableDemoMode();
+    });
+
+    if (dom.createUserForm) dom.createUserForm.addEventListener('submit', createUser);
+    if (dom.btnCancelCreate) dom.btnCancelCreate.addEventListener('click', cancelCreate);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeMobileMenu();
     });
   }
 
-  init();
+  /* ----- Init ----- */
+  document.addEventListener('DOMContentLoaded', () => {
+    bindEvents();
+    checkAuth();
+  });
 })();

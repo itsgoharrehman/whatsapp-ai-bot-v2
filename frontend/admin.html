@@ -9,17 +9,6 @@
 </head>
 <body>
 
-  <!-- ===== MOBILE DRAWER ===== -->
-  <div id="adminMobileMenu" class="mobile-overlay" aria-hidden="true">
-    <div class="mobile-drawer" role="navigation" aria-label="Admin mobile navigation">
-      <button type="button" class="btn btn-sm drawer-close" id="adminDrawerClose" aria-label="Close menu">Close</button>
-      <a href="index.html" class="btn">Dashboard</a>
-      <div class="divider"></div>
-      <div class="drawer-spacer"></div>
-      <button type="button" class="btn" id="adminMobileSignOutBtn" style="color:var(--danger);border-color:var(--danger)">Sign out</button>
-    </div>
-  </div>
-
   <!-- ===== TOP BAR ===== -->
   <header class="topbar" role="banner">
     <div class="topbar-brand">
@@ -31,9 +20,16 @@
         <a href="index.html" class="btn btn-sm">Dashboard</a>
         <button type="button" class="btn btn-sm" id="adminSignOutBtn" style="color:var(--danger)">Sign out</button>
       </nav>
-      <button type="button" class="hamburger btn btn-sm" id="adminHamburgerBtn" aria-label="Open menu" aria-expanded="false">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="1.5"/><rect y="7" width="16" height="1.5"/><rect y="12" width="16" height="1.5"/></svg>
-      </button>
+      <div class="mobile-nav-container">
+        <button type="button" class="hamburger btn btn-sm" id="adminHamburgerBtn" aria-label="Open menu" aria-expanded="false">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="1.5"/><rect y="7" width="16" height="1.5"/><rect y="12" width="16" height="1.5"/></svg>
+        </button>
+        <div id="adminMobileMenu" class="mobile-popup hidden" role="menu">
+          <a href="index.html" class="menu-item">Dashboard</a>
+          <div class="divider"></div>
+          <button type="button" class="menu-item danger-text" id="adminMobileSignOutBtn">Sign out</button>
+        </div>
+      </div>
     </div>
   </header>
 
@@ -52,6 +48,7 @@
               <th>Owner Number</th>
               <th>AI Provider</th>
               <th>Status</th>
+              <th style="text-align:right;">Action</th>
             </tr>
           </thead>
           <tbody id="tenantListBody">

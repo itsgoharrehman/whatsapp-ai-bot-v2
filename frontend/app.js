@@ -2,582 +2,470 @@
 (function () {
   'use strict';
 
-  /* ----- DOM refs ----- */
   const $ = (id) => document.getElementById(id);
 
   const dom = {
-    loginModal:       $('loginModal'),
-    loginForm:        $('loginForm'),
-    loginUsername:    $('loginUsername'),
-    loginPassword:    $('loginPassword'),
-    loginBtn:         $('loginBtn'),
-    loginError:       $('loginError'),
+    settingsModal:     $('settingsModal'),
+    settingsForm:      $('settingsForm'),
+    selAiProvider:     $('selAiProvider'),
+    inputOwnerNumber:  $('inputOwnerNumber'),
+    inputBotTag:       $('inputBotTag'),
+    inputNvidiaKeys:   $('inputNvidiaKeys'),
+    nvidiaKeyStatus:   $('nvidiaKeyStatus'),
+    inputGroqKeys:     $('inputGroqKeys'),
+    groqKeyStatus:     $('groqKeyStatus'),
+    txtSystemPrompt:   $('txtSystemPrompt'),
+    btnSaveSettings:   $('btnSaveSettings'),
+    btnCancelSettings: $('btnCancelSettings'),
+    settingsFeedback:  $('settingsFeedback'),
 
-    settingsModal:    $('settingsModal'),
-    settingsForm:     $('settingsForm'),
-    selAiProvider:    $('selAiProvider'),
-    inputOwnerNumber: $('inputOwnerNumber'),
-    inputNvidiaKeys:  $('inputNvidiaKeys'),
-    nvidiaKeyStatus:  $('nvidiaKeyStatus'),
-    inputGroqKeys:    $('inputGroqKeys'),
-    groqKeyStatus:    $('groqKeyStatus'),
-    txtSystemPrompt:  $('txtSystemPrompt'),
-    btnSaveSettings:  $('btnSaveSettings'),
-    btnCancelSettings:$('btnCancelSettings'),
-    settingsFeedback: $('settingsFeedback'),
+    mobileMenu:        $('mobileMenu'),
+    hamburgerBtn:      $('hamburgerBtn'),
+    drawerClose:       $('drawerClose'),
+    mobileSettingsBtn: $('mobileSettingsBtn'),
+    mobileAdminBtn:    $('mobileAdminBtn'),
+    mobileSignOutBtn:  $('mobileSignOutBtn'),
 
-    mobileMenu:       $('mobileMenu'),
-    hamburgerBtn:     $('hamburgerBtn'),
-    drawerClose:      $('drawerClose'),
-    mobileSettingsBtn:$('mobileSettingsBtn'),
-    mobileAdminBtn:   $('mobileAdminBtn'),
-    mobileSignOutBtn: $('mobileSignOutBtn'),
+    settingsBtn:       $('settingsBtn'),
+    adminLink:         $('adminLink'),
+    signOutBtn:        $('signOutBtn'),
 
-    settingsBtn:      $('settingsBtn'),
-    adminLink:        $('adminLink'),
-    signOutBtn:       $('signOutBtn'),
+    statusDot:         $('statusDot'),
+    statusText:        $('statusText'),
+    brandSubtitle:     $('brandSubtitle'),
+    envLabel:          $('envLabel'),
 
-    statusDot:        $('statusDot'),
-    statusText:       $('statusText'),
-    brandSubtitle:    $('brandSubtitle'),
-    envLabel:         $('envLabel'),
+    pairingView:       $('pairingView'),
+    dashboardView:     $('dashboardView'),
 
-    pairingView:      $('pairingView'),
-    dashboardView:    $('dashboardView'),
+    btnStart:          $('btnStart'),
+    btnStop:           $('btnStop'),
+    btnNewSession:     $('btnNewSession'),
 
-    btnStart:         $('btnStart'),
-    btnStop:          $('btnStop'),
-    btnNewSession:    $('btnNewSession'),
+    qrFrame:          $('qrFrame'),
+    qrLoading:        $('qrLoading'),
+    qrImage:          $('qrImage'),
+    qrConnected:      $('qrConnected'),
+    qrStatusText:     $('qrStatusText'),
 
-    qrFrame:         $('qrFrame'),
-    qrLoading:       $('qrLoading'),
-    qrImage:         $('qrImage'),
-    qrConnected:     $('qrConnected'),
-    qrStatusText:    $('qrStatusText'),
+    metricMode:        $('metricMode'),
+    metricAutoReply:   $('metricAutoReply'),
+    metricKeyIndex:    $('metricKeyIndex'),
+    metricTotalMsgs:   $('metricTotalMsgs'),
+    metricAiReplies:   $('metricAiReplies'),
 
-    metricMode:       $('metricMode'),
-    metricAutoReply:  $('metricAutoReply'),
-    metricKeyIndex:   $('metricKeyIndex'),
-    metricTotalMsgs:  $('metricTotalMsgs'),
-    metricAiReplies:  $('metricAiReplies'),
+    btnStopSession:    $('btnStopSession'),
+    btnResetPair:      $('btnResetPair'),
 
-    btnStopSession:   $('btnStopSession'),
-    btnResetPair:     $('btnResetPair'),
-
-    logStream:        $('logStream'),
-    chkAutoScroll:    $('chkAutoScroll'),
-    btnClearLogs:     $('btnClearLogs'),
+    logStream:         $('logStream'),
+    chkAutoScroll:     $('chkAutoScroll'),
+    btnClearLogs:      $('btnClearLogs'),
   };
 
   /* ----- State ----- */
-  let isAuthenticated = false;
-  let userRole = null;
+  let currentUser = null;
   let statusInterval = null;
   let logEventSource = null;
   let logPollInterval = null;
   let lastLogOffset = 0;
 
-  /* ----- API base ----- */
-  const API = '';
+  function getToken() {
+    return localStorage.getItem('session_token') || '';
+  }
 
-  /* ----- Helpers ----- */
-  function show(el) { el && el.classList.remove('hidden'); }
-  function hide(el) { el && el.classList.add('hidden'); }
+  function getHeaders() {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+    const token = getToken();
+    if (token) {
+      headers['Authorization'] = 'Bearer ' + token;
+    }
+    return headers;
+  }
 
-  function fetchJSON(url, options) {
-    return fetch(API + url, {
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      credentials: 'same-origin',
+  async function apiFetch(url, options = {}) {
+    const res = await fetch(url, {
       ...options,
-    }).then((r) => {
-      if (r.status === 401) { handleAuthLost(); throw new Error('Unauthorized'); }
-      if (!r.ok) throw new Error('Request failed: ' + r.status);
-      return r.json();
+      headers: { ...getHeaders(), ...(options.headers || {}) },
+      credentials: 'same-origin'
     });
+    if (res.status === 401) {
+      localStorage.removeItem('session_token');
+      localStorage.removeItem('user_data');
+      window.location.href = 'login.html';
+      throw new Error('Unauthorized');
+    }
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    return res.json();
   }
 
   function timestamp() {
-    const d = new Date();
-    return d.toTimeString().slice(0, 8);
+    return new Date().toTimeString().slice(0, 8);
   }
 
-  /* ----- Auth ----- */
-  function handleAuthLost() {
-    isAuthenticated = false;
-    userRole = null;
-    show(dom.loginModal);
-    stopPolling();
-    stopLogStream();
-  }
-
+  /* ----- Auth Verification ----- */
   async function checkAuth() {
     try {
-      const data = await fetchJSON('/api/auth/me');
-      isAuthenticated = true;
-      userRole = data.role || 'user';
-      hide(dom.loginModal);
-      applyRole();
-      startPolling();
-    } catch {
-      isAuthenticated = false;
-      show(dom.loginModal);
-    }
-  }
+      const data = await apiFetch('/api/auth/me');
+      currentUser = data.user || data;
+      localStorage.setItem('user_data', JSON.stringify(currentUser));
 
-  async function doLogin(e) {
-    e.preventDefault();
-    dom.loginError.textContent = '';
-    const username = dom.loginUsername.value.trim();
-    const password = dom.loginPassword.value;
-    if (!username || !password) { dom.loginError.textContent = 'Enter username and password'; return; }
-    try {
-      const data = await fetchJSON('/api/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ username, password }),
-      });
-      isAuthenticated = true;
-      userRole = data.role || 'user';
-      hide(dom.loginModal);
-      applyRole();
-      startPolling();
+      const isAdmin = currentUser.role === 'admin' || currentUser.is_admin === true;
+      if (dom.adminLink) dom.adminLink.classList.toggle('hidden', !isAdmin);
+      if (dom.mobileAdminBtn) dom.mobileAdminBtn.classList.toggle('hidden', !isAdmin);
+
+      // Start periodic status polling and load settings
+      startStatusPolling();
+      loadSettings().catch(() => {});
     } catch (err) {
-      dom.loginError.textContent = 'Invalid credentials';
+      window.location.href = 'login.html';
     }
   }
 
   async function doSignOut() {
-    try { await fetchJSON('/api/auth/logout', { method: 'POST' }); } catch {}
-    isAuthenticated = false;
-    userRole = null;
-    stopPolling();
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    localStorage.removeItem('session_token');
+    localStorage.removeItem('user_data');
+    stopStatusPolling();
     stopLogStream();
-    show(dom.loginModal);
-    closeMobileMenu();
+    window.location.href = 'login.html';
   }
 
-  function applyRole() {
-    if (userRole === 'admin') {
-      show(dom.adminLink);
-      show(dom.mobileAdminBtn);
-    } else {
-      hide(dom.adminLink);
-      hide(dom.mobileAdminBtn);
-    }
-  }
-
-  /* ----- Status Polling ----- */
-  function startPolling() {
-    stopPolling();
+  function startStatusPolling() {
+    stopStatusPolling();
     pollStatus();
-    statusInterval = setInterval(pollStatus, 4000);
   }
 
-  function stopPolling() {
-    if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+  function stopStatusPolling() {
+    if (statusInterval) {
+      clearTimeout(statusInterval);
+      statusInterval = null;
+    }
   }
 
   async function pollStatus() {
     try {
-      const data = await fetchJSON('/api/status');
-      updateUI(data);
-    } catch {}
+      const data = await apiFetch('/api/status');
+      renderStatus(data || {});
+      const isConnected = data.connected === true || data.status === 'CONNECTED';
+      const isQrReady = Boolean(data.qr_code || data.qr || data.qrCodeDataUrl);
+
+      // Fast poll (1.5s) while generating QR code, standard 3s when idle/connected
+      const nextDelay = (!isConnected && !isQrReady) ? 1500 : 3000;
+      if (statusInterval) clearTimeout(statusInterval);
+      statusInterval = setTimeout(pollStatus, nextDelay);
+    } catch (_) {
+      if (dom.statusDot) dom.statusDot.className = 'status-dot';
+      if (dom.statusText) dom.statusText.textContent = 'Disconnected';
+      if (statusInterval) clearTimeout(statusInterval);
+      statusInterval = setTimeout(pollStatus, 3000);
+    }
   }
 
-  /* ----- UI State Switch ----- */
-  function updateUI(data) {
-    const connected = data.connected === true;
-    const qrReady = data.qr_code && !connected;
+  function renderStatus(data) {
+    const isConnected = data.connected === true || data.status === 'CONNECTED';
+    const isConnecting = data.status === 'CONNECTING';
+    const isQrReady = (data.status === 'QR_READY' || data.qr || data.qr_code) && !isConnected;
 
-    /* Top bar status */
-    dom.statusDot.className = 'status-dot' + (connected ? ' connected' : '');
-    dom.statusText.textContent = connected ? 'Connected' : 'Disconnected';
+    // Status Dot and Text
+    if (dom.statusDot) {
+      dom.statusDot.className = 'status-dot' + (isConnected ? ' connected' : (isConnecting ? ' danger' : ''));
+    }
+    if (dom.statusText) {
+      dom.statusText.textContent = isConnected ? 'Connected' : (isConnecting ? 'Connecting...' : 'Disconnected');
+    }
 
-    if (connected) {
-      hide(dom.pairingView);
-      show(dom.dashboardView);
-      hide(dom.brandSubtitle);
-      show(dom.envLabel);
+    if (isConnected) {
+      // Show Dashboard View, Hide Pairing View
+      if (dom.pairingView) dom.pairingView.classList.add('hidden');
+      if (dom.dashboardView) dom.dashboardView.classList.remove('hidden');
+      if (dom.brandSubtitle) dom.brandSubtitle.classList.add('hidden');
+      if (dom.envLabel) dom.envLabel.classList.remove('hidden');
 
-      dom.metricMode.textContent = data.operating_mode || 'Auto';
-      dom.metricAutoReply.textContent = data.auto_reply ? 'On' : 'Off';
-      dom.metricAutoReply.className = 'metric-value' + (data.auto_reply ? ' green' : '');
-      dom.metricKeyIndex.textContent = data.active_key_index != null ? data.active_key_index : '—';
-      dom.metricTotalMsgs.textContent = data.total_messages || 0;
-      dom.metricAiReplies.textContent = data.ai_replies || 0;
+      // Update Dashboard Metrics
+      if (dom.metricMode) dom.metricMode.textContent = data.operating_mode || data.mode || 'Auto';
+      if (dom.metricAutoReply) {
+        const auto = data.auto_reply !== undefined ? data.auto_reply : data.autoReply;
+        dom.metricAutoReply.textContent = auto ? 'On' : 'Off';
+        dom.metricAutoReply.className = 'metric-value' + (auto ? ' green' : '');
+      }
+      if (dom.metricKeyIndex) {
+        dom.metricKeyIndex.textContent = data.active_key_index !== undefined ? data.active_key_index : (data.key_index || '0');
+      }
+      if (dom.metricTotalMsgs) {
+        dom.metricTotalMsgs.textContent = data.messages_processed ?? data.total_messages ?? 0;
+      }
+      if (dom.metricAiReplies) {
+        dom.metricAiReplies.textContent = data.ai_replies ?? data.total_replies ?? 0;
+      }
 
+      // Start live logs if not already streaming
       startLogStream();
     } else {
-      show(dom.pairingView);
-      hide(dom.dashboardView);
-      show(dom.brandSubtitle);
-      hide(dom.envLabel);
+      // Show Pairing View, Hide Dashboard View
+      if (dom.pairingView) dom.pairingView.classList.remove('hidden');
+      if (dom.dashboardView) dom.dashboardView.classList.add('hidden');
+      if (dom.brandSubtitle) dom.brandSubtitle.classList.remove('hidden');
+      if (dom.envLabel) dom.envLabel.classList.add('hidden');
+
       stopLogStream();
 
-      /* QR states */
-      if (qrReady) {
-        hide(dom.qrLoading);
-        show(dom.qrImage);
-        hide(dom.qrConnected);
-        dom.qrImage.src = data.qr_code;
-        dom.qrStatusText.textContent = 'Scan with WhatsApp to pair';
-      } else if (data.session_loading) {
-        show(dom.qrLoading);
-        hide(dom.qrImage);
-        hide(dom.qrConnected);
-        dom.qrStatusText.textContent = 'Generating QR code...';
+      // Handle QR State
+      const qrData = data.qr_code || data.qr || data.qrCodeDataUrl;
+      if (qrData) {
+        if (dom.qrLoading) dom.qrLoading.classList.add('hidden');
+        if (dom.qrConnected) dom.qrConnected.classList.add('hidden');
+        if (dom.qrImage) {
+          dom.qrImage.src = qrData.startsWith('data:') || qrData.startsWith('http') ? qrData : 'data:image/png;base64,' + qrData;
+          dom.qrImage.classList.remove('hidden');
+        }
+        if (dom.qrStatusText) dom.qrStatusText.textContent = 'Scan QR code with WhatsApp';
       } else {
-        hide(dom.qrLoading);
-        hide(dom.qrImage);
-        hide(dom.qrConnected);
-        dom.qrStatusText.textContent = 'Waiting for session start';
+        if (dom.qrLoading) dom.qrLoading.classList.remove('hidden');
+        if (dom.qrImage) dom.qrImage.classList.add('hidden');
+        if (dom.qrConnected) dom.qrConnected.classList.add('hidden');
+        if (dom.qrStatusText) dom.qrStatusText.textContent = isConnecting ? 'Initializing WhatsApp session...' : 'Generating QR code...';
       }
     }
   }
 
-  /* ----- Log Streaming ----- */
+  /* ----- WhatsApp Control Actions ----- */
+  async function triggerControl(action, btnEl) {
+    if (btnEl) btnEl.disabled = true;
+    try {
+      await apiFetch('/api/control', {
+        method: 'POST',
+        body: JSON.stringify({ action })
+      });
+      appendLogLine(`Action requested: ${action}`);
+      setTimeout(pollStatus, 500);
+    } catch (err) {
+      appendLogLine(`Action failed: ${action}`);
+    } finally {
+      if (btnEl) btnEl.disabled = false;
+    }
+  }
+
+  /* ----- Real-time Event Terminal Logs ----- */
   function startLogStream() {
     if (logEventSource || logPollInterval) return;
 
-    /* Try SSE first */
+    const token = getToken();
+    const streamUrl = `/api/logs/stream?token=${encodeURIComponent(token)}`;
+
     try {
-      logEventSource = new EventSource(API + '/api/logs/stream');
+      logEventSource = new EventSource(streamUrl);
+
       logEventSource.onmessage = function (ev) {
-        appendLogLine(ev.data);
+        try {
+          const payload = JSON.parse(ev.data);
+          if (payload.type === 'history' && Array.isArray(payload.logs)) {
+            payload.logs.forEach(l => appendLogLine(typeof l === 'string' ? l : (l.message || '')));
+          } else if (payload.type === 'log' && payload.log) {
+            appendLogLine(typeof payload.log === 'string' ? payload.log : (payload.log.message || ''));
+          } else if (payload.message) {
+            appendLogLine(payload.message);
+          }
+        } catch (_) {
+          appendLogLine(ev.data);
+        }
       };
+
       logEventSource.onerror = function () {
-        /* Fallback to polling */
         stopLogStream();
         logPollInterval = setInterval(pollLogs, 3000);
       };
-    } catch {
+    } catch (_) {
       logPollInterval = setInterval(pollLogs, 3000);
     }
   }
 
   function stopLogStream() {
-    if (logEventSource) { logEventSource.close(); logEventSource = null; }
-    if (logPollInterval) { clearInterval(logPollInterval); logPollInterval = null; }
+    if (logEventSource) {
+      logEventSource.close();
+      logEventSource = null;
+    }
+    if (logPollInterval) {
+      clearInterval(logPollInterval);
+      logPollInterval = null;
+    }
   }
 
   async function pollLogs() {
     try {
-      const data = await fetchJSON('/api/logs?offset=' + lastLogOffset);
-      if (data && data.logs && data.logs.length) {
-        data.logs.forEach(function (line) { appendLogLine(line); });
-        lastLogOffset += data.logs.length;
+      const data = await apiFetch('/api/logs?offset=' + lastLogOffset);
+      const logs = Array.isArray(data) ? data : (data.logs || []);
+      if (logs && logs.length > 0) {
+        logs.forEach(l => appendLogLine(typeof l === 'string' ? l : (l.message || l.msg || '')));
+        lastLogOffset += logs.length;
       }
-    } catch {}
+    } catch (_) {}
   }
 
   function appendLogLine(raw) {
+    if (!raw || !dom.logStream) return;
     const line = document.createElement('span');
     line.className = 'log-line';
-    line.textContent = '[' + timestamp() + '] ' + raw;
+    line.textContent = `[${timestamp()}] ${raw}`;
     dom.logStream.appendChild(line);
-    if (dom.chkAutoScroll.checked) {
+
+    // Keep terminal buffer capped
+    while (dom.logStream.childElementCount > 300) {
+      dom.logStream.removeChild(dom.logStream.firstChild);
+    }
+
+    if (dom.chkAutoScroll && dom.chkAutoScroll.checked) {
       dom.logStream.scrollTop = dom.logStream.scrollHeight;
     }
   }
 
-  /* ----- Controls ----- */
-  async function controlAction(endpoint) {
+  /* ----- AI & Account Settings ----- */
+  async function loadSettings() {
     try {
-      await fetchJSON('/api/' + endpoint, { method: 'POST' });
-      appendLogLine('Action: ' + endpoint);
-      setTimeout(pollStatus, 800);
-    } catch (err) {
-      appendLogLine('Error: ' + endpoint + ' failed');
+      const data = await apiFetch('/api/settings');
+      if (dom.selAiProvider) dom.selAiProvider.value = data.ai_provider || data.provider || 'nvidia';
+      if (dom.inputOwnerNumber) dom.inputOwnerNumber.value = data.owner_number || data.ownerNumber || '';
+      if (dom.inputBotTag) dom.inputBotTag.value = data.bot_tag || data.botTag || '';
+      if (dom.inputNvidiaKeys) dom.inputNvidiaKeys.value = Array.isArray(data.nvidia_keys) ? data.nvidia_keys.join(', ') : (data.nvidia_keys || '');
+      if (dom.inputGroqKeys) dom.inputGroqKeys.value = Array.isArray(data.groq_keys) ? data.groq_keys.join(', ') : (data.groq_keys || '');
+      if (dom.txtSystemPrompt) dom.txtSystemPrompt.value = data.system_prompt || data.systemPrompt || '';
+
+      updateKeyStatus(dom.nvidiaKeyStatus, data.nvidia_keys);
+      updateKeyStatus(dom.groqKeyStatus, data.groq_keys);
+    } catch (_) {}
+  }
+
+  function updateKeyStatus(el, keys) {
+    if (!el) return;
+    const count = Array.isArray(keys) ? keys.length : (keys ? 1 : 0);
+    if (count > 0) {
+      el.textContent = `${count} key(s) configured`;
+      el.className = 'key-status valid';
+    } else {
+      el.textContent = 'No keys configured';
+      el.className = 'key-status neutral';
     }
   }
 
-  /* ----- Settings ----- */
-  async function openSettings() {
-    dom.settingsFeedback.textContent = '';
-    dom.settingsFeedback.className = 'settings-feedback';
-    try {
-      const data = await fetchJSON('/api/settings');
-      dom.selAiProvider.value = data.ai_provider || 'auto';
-      dom.inputOwnerNumber.value = data.owner_number || '';
-      dom.inputNvidiaKeys.value = (data.nvidia_keys || []).join(',');
-      dom.inputGroqKeys.value = (data.groq_keys || []).join(',');
-      dom.txtSystemPrompt.value = data.system_prompt || '';
-      updateKeyStatus(dom.nvidiaKeyStatus, data.nvidia_keys);
-      updateKeyStatus(dom.groqKeyStatus, data.groq_keys);
-    } catch {}
-    show(dom.settingsModal);
+  function openSettings() {
+    loadSettings().catch(() => {});
+    if (dom.settingsFeedback) {
+      dom.settingsFeedback.textContent = '';
+      dom.settingsFeedback.className = 'settings-feedback';
+    }
+    if (dom.settingsModal) dom.settingsModal.classList.remove('hidden');
     closeMobileMenu();
   }
 
   function closeSettings() {
-    hide(dom.settingsModal);
+    if (dom.settingsModal) dom.settingsModal.classList.add('hidden');
   }
 
   async function saveSettings(e) {
     e.preventDefault();
-    dom.settingsFeedback.textContent = '';
-    dom.settingsFeedback.className = 'settings-feedback';
+    if (dom.settingsFeedback) {
+      dom.settingsFeedback.textContent = '';
+      dom.settingsFeedback.className = 'settings-feedback';
+    }
+    if (dom.btnSaveSettings) dom.btnSaveSettings.disabled = true;
+
     const payload = {
-      ai_provider: dom.selAiProvider.value,
-      owner_number: dom.inputOwnerNumber.value.trim(),
-      nvidia_keys: dom.inputNvidiaKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean),
-      groq_keys: dom.inputGroqKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean),
-      system_prompt: dom.txtSystemPrompt.value,
+      provider: dom.selAiProvider ? dom.selAiProvider.value : 'nvidia',
+      owner_number: dom.inputOwnerNumber ? dom.inputOwnerNumber.value.trim() : '',
+      bot_tag: dom.inputBotTag ? dom.inputBotTag.value.trim() : '',
+      nvidia_keys: dom.inputNvidiaKeys ? dom.inputNvidiaKeys.value.split(',').map(s => s.trim()).filter(Boolean) : [],
+      groq_keys: dom.inputGroqKeys ? dom.inputGroqKeys.value.split(',').map(s => s.trim()).filter(Boolean) : [],
+      system_prompt: dom.txtSystemPrompt ? dom.txtSystemPrompt.value : ''
     };
+
     try {
-      await fetchJSON('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
-      dom.settingsFeedback.textContent = 'Settings saved';
-      dom.settingsFeedback.className = 'settings-feedback success';
-    } catch {
-      dom.settingsFeedback.textContent = 'Failed to save settings';
-      dom.settingsFeedback.className = 'settings-feedback error';
+      await apiFetch('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      if (dom.settingsFeedback) {
+        dom.settingsFeedback.textContent = 'Settings saved successfully.';
+        dom.settingsFeedback.className = 'settings-feedback success';
+      }
+      setTimeout(closeSettings, 1000);
+    } catch (err) {
+      if (dom.settingsFeedback) {
+        dom.settingsFeedback.textContent = 'Failed to save settings.';
+        dom.settingsFeedback.className = 'settings-feedback error';
+      }
+    } finally {
+      if (dom.btnSaveSettings) dom.btnSaveSettings.disabled = false;
     }
   }
 
-  function updateKeyStatus(el, keys) {
-    if (!keys || !keys.length) {
-      el.textContent = 'No keys configured';
-      el.className = 'key-status neutral';
+  /* ----- Mobile Dropdown Popup ----- */
+  function toggleMobileMenu(e) {
+    if (e) e.stopPropagation();
+    if (!dom.mobileMenu) return;
+    const isHidden = dom.mobileMenu.classList.contains('hidden');
+    if (isHidden) {
+      dom.mobileMenu.classList.remove('hidden');
+      if (dom.hamburgerBtn) dom.hamburgerBtn.setAttribute('aria-expanded', 'true');
     } else {
-      el.textContent = keys.length + ' key' + (keys.length > 1 ? 's' : '') + ' configured';
-      el.className = 'key-status valid';
+      closeMobileMenu();
     }
-  }
-
-  /* ----- Mobile Menu ----- */
-  function openMobileMenu() {
-    dom.mobileMenu.classList.add('open');
-    dom.mobileMenu.setAttribute('aria-hidden', 'false');
-    dom.hamburgerBtn.setAttribute('aria-expanded', 'true');
   }
 
   function closeMobileMenu() {
-    dom.mobileMenu.classList.remove('open');
-    dom.mobileMenu.setAttribute('aria-hidden', 'true');
-    dom.hamburgerBtn.setAttribute('aria-expanded', 'false');
+    if (dom.mobileMenu) dom.mobileMenu.classList.add('hidden');
+    if (dom.hamburgerBtn) dom.hamburgerBtn.setAttribute('aria-expanded', 'false');
   }
 
-  /* ----- Event Bindings ----- */
-  dom.loginForm.addEventListener('submit', doLogin);
-  dom.signOutBtn.addEventListener('click', doSignOut);
-  dom.mobileSignOutBtn.addEventListener('click', doSignOut);
+  /* ----- Event Listeners ----- */
+  function bindEvents() {
+    if (dom.signOutBtn) dom.signOutBtn.addEventListener('click', doSignOut);
+    if (dom.mobileSignOutBtn) dom.mobileSignOutBtn.addEventListener('click', () => { closeMobileMenu(); doSignOut(); });
 
-  dom.hamburgerBtn.addEventListener('click', openMobileMenu);
-  dom.drawerClose.addEventListener('click', closeMobileMenu);
-  dom.mobileMenu.addEventListener('click', function (e) {
-    if (e.target === dom.mobileMenu) closeMobileMenu();
-  });
+    if (dom.settingsBtn) dom.settingsBtn.addEventListener('click', openSettings);
+    if (dom.mobileSettingsBtn) dom.mobileSettingsBtn.addEventListener('click', () => { closeMobileMenu(); openSettings(); });
+    if (dom.btnCancelSettings) dom.btnCancelSettings.addEventListener('click', closeSettings);
+    if (dom.settingsForm) dom.settingsForm.addEventListener('submit', saveSettings);
 
-  dom.settingsBtn.addEventListener('click', openSettings);
-  dom.mobileSettingsBtn.addEventListener('click', openSettings);
-  dom.btnCancelSettings.addEventListener('click', closeSettings);
-  dom.settingsForm.addEventListener('submit', saveSettings);
+    if (dom.hamburgerBtn) dom.hamburgerBtn.addEventListener('click', toggleMobileMenu);
 
-  dom.btnStart.addEventListener('click', function () { controlAction('start'); });
-  dom.btnStop.addEventListener('click', function () { controlAction('stop'); });
-  dom.btnNewSession.addEventListener('click', function () { controlAction('reset_session'); });
-
-  dom.btnStopSession.addEventListener('click', function () { controlAction('stop'); });
-  dom.btnResetPair.addEventListener('click', function () { controlAction('reset_session'); });
-
-  dom.btnClearLogs.addEventListener('click', function () {
-    dom.logStream.innerHTML = '';
-    lastLogOffset = 0;
-  });
-
-  /* Live key status while typing */
-  dom.inputNvidiaKeys.addEventListener('input', function () {
-    const keys = dom.inputNvidiaKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean);
-    updateKeyStatus(dom.nvidiaKeyStatus, keys);
-  });
-  dom.inputGroqKeys.addEventListener('input', function () {
-    const keys = dom.inputGroqKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean);
-    updateKeyStatus(dom.groqKeyStatus, keys);
-  });
-
-  /* Keyboard: Escape to close overlays */
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      if (!dom.settingsModal.classList.contains('hidden')) closeSettings();
-      if (dom.mobileMenu.classList.contains('open')) closeMobileMenu();
-    }
-  });
-
-  /* ----- Demo Mode (no backend) ----- */
-  /* When there is no API backend, render a self-contained demo so the UI is fully visible */
-  let demoMode = false;
-
-  function enableDemoMode() {
-    demoMode = true;
-    hide(dom.loginModal);
-    isAuthenticated = true;
-    userRole = 'admin';
-    applyRole();
-
-    /* Show pairing briefly, then auto-transition to dashboard */
-    showPairingDemo();
-    setTimeout(function () {
-      appendLogLine('Session start requested');
-      setTimeout(showDashboardDemo, 600);
-    }, 1800);
-  }
-
-  function showPairingDemo() {
-    dom.statusDot.className = 'status-dot';
-    dom.statusText.textContent = 'Disconnected';
-    show(dom.pairingView);
-    hide(dom.dashboardView);
-    show(dom.brandSubtitle);
-    hide(dom.envLabel);
-
-    /* Show a placeholder QR */
-    hide(dom.qrLoading);
-    show(dom.qrImage);
-    hide(dom.qrConnected);
-    /* Generate a simple SVG QR-like placeholder */
-    dom.qrImage.src = 'data:image/svg+xml,' + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">' +
-      '<rect width="200" height="200" fill="#1f2c33"/>' +
-      '<g fill="#e9edef" opacity="0.15">' +
-      Array.from({length: 400}, function(_, i) {
-        var x = (i % 20) * 10; var y = Math.floor(i / 20) * 10;
-        return Math.random() > 0.45 ? '<rect x="'+x+'" y="'+y+'" width="9" height="9" rx="1"/>' : '';
-      }).join('') +
-      '</g></svg>'
-    );
-    dom.qrStatusText.textContent = 'Scan with WhatsApp to pair';
-  }
-
-  function showDashboardDemo() {
-    dom.statusDot.className = 'status-dot connected';
-    dom.statusText.textContent = 'Connected';
-    hide(dom.pairingView);
-    show(dom.dashboardView);
-    hide(dom.brandSubtitle);
-    show(dom.envLabel);
-
-    dom.metricMode.textContent = 'Auto';
-    dom.metricAutoReply.textContent = 'On';
-    dom.metricAutoReply.className = 'metric-value green';
-    dom.metricKeyIndex.textContent = '0';
-    dom.metricTotalMsgs.textContent = '1,247';
-    dom.metricAiReplies.textContent = '893';
-
-    /* Start demo log stream */
-    if (!demoLogTimer) startDemoLog();
-  }
-
-  let demoLogTimer = null;
-  const demoMessages = [
-    'Incoming message from +1 (555) 0142',
-    'AI reply sent (NVIDIA NIM, model: meta/llama3-70b)',
-    'Incoming message from +44 7700 900123',
-    'Auto-reply triggered for owner command: status',
-    'AI reply sent (Groq, model: mixtral-8x7b)',
-    'Incoming group message from Family Group',
-    'Ignored: group message (auto-reply off for groups)',
-    'Incoming message from +1 (555) 0198',
-    'AI reply sent (NVIDIA NIM, model: meta/llama3-70b)',
-    'Session heartbeat OK',
-    'Incoming message from +91 98765 43210',
-    'AI reply sent (Auto → Groq fallback)',
-    'Rate limit warning: NVIDIA NIM key 0 approaching limit',
-    'Switched to NVIDIA NIM key 1',
-    'Incoming message from +1 (555) 0142',
-    'AI reply sent (NVIDIA NIM key 1)',
-  ];
-  let demoMsgIndex = 0;
-
-  function startDemoLog() {
-    demoLogTimer = setInterval(function () {
-      appendLogLine(demoMessages[demoMsgIndex % demoMessages.length]);
-      demoMsgIndex++;
-    }, 2200);
-  }
-
-  function stopDemoLog() {
-    if (demoLogTimer) { clearInterval(demoLogTimer); demoLogTimer = null; }
-  }
-
-  /* Demo control overrides */
-  dom.btnStart.addEventListener('click', function () {
-    if (demoMode) {
-      appendLogLine('Starting session...');
-      setTimeout(showDashboardDemo, 1200);
-    }
-  }, true);
-
-  dom.btnStop.addEventListener('click', function () {
-    if (demoMode) {
-      stopDemoLog();
-      showPairingDemo();
-      dom.qrStatusText.textContent = 'Session stopped';
-    }
-  }, true);
-
-  dom.btnNewSession.addEventListener('click', function () {
-    if (demoMode) {
-      stopDemoLog();
-      show(dom.qrLoading);
-      hide(dom.qrImage);
-      hide(dom.qrConnected);
-      dom.qrStatusText.textContent = 'Generating new QR code...';
-      setTimeout(showPairingDemo, 1500);
-    }
-  }, true);
-
-  dom.btnStopSession.addEventListener('click', function () {
-    if (demoMode) {
-      stopDemoLog();
-      appendLogLine('Session stopped by user');
-      setTimeout(showPairingDemo, 400);
-    }
-  }, true);
-
-  dom.btnResetPair.addEventListener('click', function () {
-    if (demoMode) {
-      stopDemoLog();
-      appendLogLine('Session reset — pairing new device');
-      setTimeout(showPairingDemo, 600);
-    }
-  }, true);
-
-  /* Demo login */
-  dom.loginForm.addEventListener('submit', function (e) {
-    if (demoMode) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      hide(dom.loginModal);
-      isAuthenticated = true;
-      userRole = 'admin';
-      applyRole();
-      showPairingDemo();
-    }
-  }, true);
-
-  /* Demo settings */
-  dom.settingsForm.addEventListener('submit', function (e) {
-    if (demoMode) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      dom.settingsFeedback.textContent = 'Settings saved';
-      dom.settingsFeedback.className = 'settings-feedback success';
-      setTimeout(closeSettings, 1200);
-    }
-  }, true);
-
-  /* ----- Init ----- */
-  async function init() {
-    try {
-      const r = await fetch(API + '/api/auth/me', { method: 'GET', credentials: 'same-origin' });
-      if (r.ok || r.status === 401) {
-        /* Backend exists — use real mode */
-        checkAuth();
-        return;
+    // Auto-close dropdown when clicking anywhere outside
+    document.addEventListener('click', (e) => {
+      if (dom.mobileMenu && !dom.mobileMenu.contains(e.target) && e.target !== dom.hamburgerBtn && !dom.hamburgerBtn.contains(e.target)) {
+        closeMobileMenu();
       }
-    } catch {}
-    /* No backend detected — enable self-contained demo */
-    enableDemoMode();
+    });
+
+    if (dom.btnStart) dom.btnStart.addEventListener('click', () => triggerControl('start', dom.btnStart));
+    if (dom.btnStop) dom.btnStop.addEventListener('click', () => triggerControl('stop', dom.btnStop));
+    if (dom.btnNewSession) dom.btnNewSession.addEventListener('click', () => triggerControl('reset_session', dom.btnNewSession));
+
+    if (dom.btnStopSession) dom.btnStopSession.addEventListener('click', () => triggerControl('stop', dom.btnStopSession));
+    if (dom.btnResetPair) dom.btnResetPair.addEventListener('click', () => triggerControl('reset_session', dom.btnResetPair));
+
+    if (dom.btnClearLogs) {
+      dom.btnClearLogs.addEventListener('click', () => {
+        if (dom.logStream) dom.logStream.innerHTML = '';
+        lastLogOffset = 0;
+      });
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeSettings();
+        closeMobileMenu();
+      }
+    });
   }
 
-  init();
+  /* ----- Initialize ----- */
+  document.addEventListener('DOMContentLoaded', () => {
+    bindEvents();
+    checkAuth();
+  });
 })();

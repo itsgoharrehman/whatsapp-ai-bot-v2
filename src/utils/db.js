@@ -126,55 +126,66 @@ class JsonDatabase {
   }
 
   ensureAdminUser() {
-    const adminExists = Object.values(this.data.users).some(u => u.role === 'admin');
-    if (!adminExists) {
-      const adminId = 'user_admin';
-      const username = config.adminUsername || 'admin';
-      let rawPassword = config.adminPassword;
-      let generated = false;
+    const adminUser = Object.values(this.data.users).find(u => u.role === 'admin');
 
-      if (!rawPassword) {
-        rawPassword = generateRandomPassword(16);
-        generated = true;
+    if (config.adminPassword) {
+      if (adminUser) {
+        const pass = hashPassword(config.adminPassword);
+        adminUser.passwordHash = pass.hash;
+        adminUser.salt = pass.salt;
+        this.save();
+        return;
       }
+    } else if (adminUser) {
+      return;
+    }
 
-      const pass = hashPassword(rawPassword);
-      this.data.users[adminId] = {
-        id: adminId,
-        username,
-        passwordHash: pass.hash,
-        salt: pass.salt,
-        role: 'admin',
-        enabled: true,
-        createdAt: new Date().toISOString()
-      };
+    const adminId = 'user_admin';
+    const username = config.adminUsername || 'admin';
+    let rawPassword = config.adminPassword;
+    let isGenerated = false;
 
-      this.data.user_settings[adminId] = {
-        provider: config.defaultProvider || 'nvidia',
-        ownerNumber: '',
-        autoReply: true,
-        systemPrompt: ''
-      };
-      this.data.user_api_keys[adminId] = {
-        groqKeysEncrypted: [],
-        nvidiaKeysEncrypted: []
-      };
-      this.data.user_conversations[adminId] = {};
-      this.data.user_analytics[adminId] = {
-        totalMessagesProcessed: 0,
-        totalRepliesSent: 0,
-        rateLimitedCount: 0,
-        keyRotationsCount: 0
-      };
+    if (!rawPassword) {
+      rawPassword = generateRandomPassword(16);
+      isGenerated = true;
+    }
 
-      this.save();
+    const pass = hashPassword(rawPassword);
+    this.data.users[adminId] = {
+      id: adminId,
+      username,
+      passwordHash: pass.hash,
+      salt: pass.salt,
+      role: 'admin',
+      enabled: true,
+      createdAt: new Date().toISOString()
+    };
 
-      if (generated) {
-        logger.warn(`[SECURITY] Created default Admin account '${username}'. Temporary Password: ${rawPassword}`);
-        logger.warn('[SECURITY] Please change this password in the admin panel or set ADMIN_PASSWORD in environment.');
-      } else {
-        logger.info(`[SECURITY] Admin account initialized with configured credentials for '${username}'.`);
-      }
+    this.data.user_settings[adminId] = {
+      provider: config.defaultProvider || 'nvidia',
+      ownerNumber: '',
+      autoReply: true,
+      systemPrompt: ''
+    };
+    this.data.user_api_keys[adminId] = {
+      groqKeysEncrypted: [],
+      nvidiaKeysEncrypted: []
+    };
+    this.data.user_conversations[adminId] = {};
+    this.data.user_analytics[adminId] = {
+      totalMessagesProcessed: 0,
+      totalRepliesSent: 0,
+      rateLimitedCount: 0,
+      keyRotationsCount: 0
+    };
+
+    this.save();
+
+    if (isGenerated) {
+      logger.warn(`[SECURITY] No ADMIN_PASSWORD in .env. Generated secure temporary password: ${rawPassword}`);
+      logger.warn(`[SECURITY] Set ADMIN_PASSWORD in your .env to define your own private password.`);
+    } else {
+      logger.info(`[SECURITY] Admin account initialized with configured credentials for '${username}'.`);
     }
   }
 

@@ -1,3 +1,171 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -72,7 +240,12 @@ export function createServer() {
   });
 
   app.get('/internal/status/:userId', internalAuthMiddleware, (req, res) => {
-    res.json(sessionManager.getStatus(req.params.userId));
+    const { userId } = req.params;
+    const session = sessionManager.getSession(userId);
+    if (session.status === 'DISCONNECTED' && !session.isStopping) {
+      session.start(false).catch(() => {});
+    }
+    res.json(sessionManager.getStatus(userId));
   });
 
   app.post('/internal/control/:userId/:action', internalAuthMiddleware, async (req, res) => {
@@ -217,6 +390,10 @@ export function createServer() {
       }
     }
     if (!st) {
+      const session = sessionManager.getSession(req.user.id);
+      if (session && session.status === 'DISCONNECTED' && !session.isStopping) {
+        session.start(false).catch(() => {});
+      }
       st = sessionManager.getStatus(req.user.id);
     }
 
@@ -351,12 +528,15 @@ export function createServer() {
     const currentSettings = db.getUserSettings(req.user.id);
     const currentKeys = db.getUserApiKeys(req.user.id);
     const maskedKeys = db.getMaskedUserApiKeys(req.user.id);
+    const defaultTag = '@' + (req.user.username || 'bot');
 
     res.json({
       provider: currentSettings.provider || 'auto',
       ai_provider: currentSettings.provider || 'auto',
       owner_number: currentSettings.ownerNumber || '',
       ownerNumber: currentSettings.ownerNumber || '',
+      bot_tag: currentSettings.botTag || defaultTag,
+      botTag: currentSettings.botTag || defaultTag,
       nvidia_keys: maskedKeys.nvidiaKeysMasked || [],
       groq_keys: maskedKeys.groqKeysMasked || [],
       system_prompt: currentSettings.systemPrompt || '',
@@ -372,6 +552,7 @@ export function createServer() {
     const body = req.body || {};
     const provider = body.provider || body.ai_provider || (body.settings && body.settings.provider);
     const ownerNumber = body.owner_number || body.ownerNumber || (body.settings && body.settings.ownerNumber);
+    const botTag = body.bot_tag !== undefined ? body.bot_tag : (body.botTag !== undefined ? body.botTag : (body.settings && body.settings.botTag));
     const systemPrompt = body.system_prompt !== undefined ? body.system_prompt : (body.systemPrompt !== undefined ? body.systemPrompt : (body.settings && body.settings.systemPrompt));
     
     let groqKeys = body.groq_keys || body.groqKeys || (body.keys && body.keys.groqKeys);
@@ -383,6 +564,7 @@ export function createServer() {
     const settingUpdates = {};
     if (provider) settingUpdates.provider = provider;
     if (ownerNumber !== undefined) settingUpdates.ownerNumber = ownerNumber;
+    if (botTag !== undefined) settingUpdates.botTag = botTag;
     if (systemPrompt !== undefined) settingUpdates.systemPrompt = systemPrompt;
 
     if (Object.keys(settingUpdates).length > 0) {

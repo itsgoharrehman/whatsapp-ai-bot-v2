@@ -1,0 +1,13 @@
+name = "whatsapp-bot-control-plane"
+main = "cloudflare/worker.js"
+compatibility_date = "2026-08-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./frontend"
+binding = "ASSETS"
+
+[vars]
+ALWAYSDATA_BASE_URL = "https://your-account.alwaysdata.net"
+INTERNAL_API_KEY = "set-your-secure-internal-api-key"
+ENCRYPTION_SECRET = "set-your-secure-encryption-secret-min-16-chars"

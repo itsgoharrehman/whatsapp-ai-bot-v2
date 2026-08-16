@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Mark Zuckerberg — Personal Assistant</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Auth View (Shown during pairing / disconnected) -->
+  <section id="authView" class="view" aria-labelledby="authBrand">
+    <header class="topbar auth-topbar">
+      <div class="topbar-inner">
+        <div class="identity">
+          <h1 id="authBrand" class="brand">Mark Zuckerberg</h1>
+          <span class="subtitle" id="authSubtitle">Personal Assistant</span>
+        </div>
+        <div class="topbar-meta">
+          <div class="user-session-controls">
+            <span class="current-user-badge" id="authUsernameBadge"></span>
+            <button id="authSettingsBtn" class="button-sm" type="button">⚙️ Settings</button>
+            <button id="authAdminBtn" class="button-sm admin-btn" hidden type="button">🛡️ Admin</button>
+            <button id="authLogoutBtn" class="button-sm button-logout" type="button">Logout</button>
+          </div>
+          <div id="authStatus" class="status disconnected" role="status" aria-live="polite">
+            <span class="status-marker" aria-hidden="true"></span>
+            <span class="status-text">DISCONNECTED</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="auth-layout">
+        <section class="auth-instructions" aria-labelledby="setupHeading">
+          <h2 id="setupHeading" class="section-heading">Link WhatsApp Device</h2>
+          <ol class="instructions">
+            <li>
+              <span class="instruction-title">Start the service</span>
+              <span class="instruction-copy">Select Start or New Session to generate a secure pairing QR code.</span>
+            </li>
+            <li>
+              <span class="instruction-title">Open Linked Devices</span>
+              <span class="instruction-copy">On your phone, open WhatsApp &gt; Settings &gt; Linked Devices.</span>
+            </li>
+            <li>
+              <span class="instruction-title">Scan the QR code</span>
+              <span class="instruction-copy">Tap "Link a Device" and scan the pairing code displayed here.</span>
+            </li>
+            <li>
+              <span class="instruction-title">Automated synchronization</span>
+              <span class="instruction-copy">Once authenticated, the console automatically switches to live operational mode.</span>
+            </li>
+          </ol>
+          <div class="auth-actions" aria-label="Session controls">
+            <button id="startBtn" class="button-primary" type="button">Start</button>
+            <button id="stopBtn" class="button-danger" type="button">Stop</button>
+            <button id="newSessionBtn" type="button">New Session &amp; Pair QR</button>
+          </div>
+        </section>
+
+        <section class="auth-qr" aria-labelledby="qrHeading">
+          <h2 id="qrHeading" class="section-heading">Device Pairing Code</h2>
+          <div class="qr-content">
+            <div id="qrBox" class="qr-box" aria-live="polite">
+              <div id="qrLoading" class="qr-state active">
+                <div class="qr-state-inner">
+                  <div class="spinner" aria-hidden="true"></div>
+                  <p class="state-title" id="qrStateTitle">Initializing Service</p>
+                  <p class="state-copy" id="qrStateCopy">Click Start to generate pairing QR code.</p>
+                </div>
+              </div>
+
+              <div id="qrReady" class="qr-state">
+                <img id="qrImage" alt="WhatsApp Pairing QR Code" src="">
+              </div>
+
+              <div id="qrConnected" class="qr-state">
+                <div class="qr-state-inner">
+                  <div class="confirmation-mark" aria-hidden="true">✓</div>
+                  <p class="state-title">Device Connected</p>
+                  <p class="state-copy">Active session authenticated. Switching to console...</p>
+                </div>
+              </div>
+            </div>
+            <p class="qr-note" id="qrNote">Scan QR code using WhatsApp linked devices.</p>
+          </div>
+        </section>
+      </div>
+    </main>
+  </section>
+
+  <!-- Dashboard View (Shown when socket is connected) -->
+  <section id="dashboardView" class="view" hidden aria-labelledby="dashboardBrand">
+    <header class="topbar dashboard-topbar">
+      <div class="topbar-inner">
+        <div class="identity">
+          <h1 id="dashboardBrand" class="brand">Mark Zuckerberg</h1>
+          <span class="subtitle" id="dashboardSubtitle">Personal Assistant</span>
+        </div>
+        <div class="topbar-meta">
+          <div class="user-session-controls">
+            <span class="current-user-badge" id="dashboardUsernameBadge"></span>
+            <button id="dashboardSettingsBtn" class="button-sm" type="button">⚙️ Settings</button>
+            <button id="dashboardAdminBtn" class="button-sm admin-btn" hidden type="button">🛡️ Admin</button>
+            <button id="dashboardLogoutBtn" class="button-sm button-logout" type="button">Logout</button>
+          </div>
+          <span class="environment">Production</span>
+          <div id="dashboardStatus" class="status connected" role="status">
+            <span class="status-marker" aria-hidden="true"></span>
+            <span id="dashboardStatusText" class="status-text">CONNECTED</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page dashboard-page">
+      <dl class="metrics" aria-label="Service metrics">
+        <div class="metric">
+          <dt>Operating Mode</dt>
+          <dd id="operatingMode">Group &amp; Personal</dd>
+        </div>
+        <div class="metric">
+          <dt>Auto-Reply State</dt>
+          <dd id="autoReplyState">--</dd>
+        </div>
+        <div class="metric">
+          <dt>Active AI Key Index</dt>
+          <dd id="activeAiKey">--</dd>
+        </div>
+        <div class="metric">
+          <dt>Total Messages Processed</dt>
+          <dd id="totalMessages">0</dd>
+        </div>
+        <div class="metric">
+          <dt>Total AI Replies Sent</dt>
+          <dd id="totalReplies">0</dd>
+        </div>
+      </dl>
+
+      <div class="dashboard-layout">
+        <aside class="control-panel" aria-labelledby="controlsHeading">
+          <h2 id="controlsHeading" class="panel-heading">Service Controls</h2>
+          <div class="control-body">
+            <div class="control-actions">
+              <button id="dashboardStopBtn" class="button-danger" type="button">Stop Service</button>
+              <button id="dashboardNewSessionBtn" type="button">New Session &amp; Pair QR</button>
+            </div>
+            <div class="session-confirmation">
+              <p class="session-confirmation-title" id="sessionTitle">Active Session Authenticated</p>
+              <p class="session-confirmation-copy" id="sessionSubtitle">WhatsApp socket connected. QR code hidden.</p>
+            </div>
+          </div>
+        </aside>
+
+        <section class="terminal-panel" aria-labelledby="terminalHeading">
+          <header class="terminal-header">
+            <h2 id="terminalHeading" class="terminal-title">Live Event Terminal Stream</h2>
+            <div class="terminal-tools">
+              <label class="checkbox-label" for="autoScroll">
+                <input id="autoScroll" type="checkbox" checked>
+                <span>Auto-scroll</span>
+              </label>
+              <button id="clearLog" type="button">Clear log</button>
+            </div>
+          </header>
+          <div id="logArea" class="log-area" role="log" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
+        </section>
+      </div>
+    </main>
+  </section>
+
+  <!-- Login Modal Overlay -->
+  <div id="loginOverlay" class="modal-overlay" hidden>
+    <div class="modal-card login-card" role="dialog" aria-labelledby="loginTitle">
+      <div class="modal-header">
+        <h2 id="loginTitle" class="modal-title">Sign In</h2>
+        <p class="modal-subtitle">Access your personal WhatsApp Assistant session</p>
+      </div>
+      <form id="loginForm" class="modal-form">
+        <div class="form-group">
+          <label for="loginUsername">Username</label>
+          <input id="loginUsername" type="text" autocomplete="username" required placeholder="Enter username">
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input id="loginPassword" type="password" autocomplete="current-password" required placeholder="Enter password">
+        </div>
+        <div id="loginError" class="form-error" hidden></div>
+        <div class="form-actions">
+          <button id="loginSubmitBtn" class="button-primary w-full" type="submit">Sign In</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Settings / BYOK Modal -->
+  <div id="settingsModal" class="modal-overlay" hidden>
+    <div class="modal-card" role="dialog" aria-labelledby="settingsTitle">
+      <div class="modal-header">
+        <h2 id="settingsTitle" class="modal-title">AI &amp; Account Settings</h2>
+        <button id="closeSettingsBtn" class="modal-close-btn" type="button" aria-label="Close">&times;</button>
+      </div>
+      <form id="settingsForm" class="modal-form">
+        <div class="form-group">
+          <label for="settingsProvider">AI Provider</label>
+          <select id="settingsProvider" class="form-select">
+            <option value="nvidia">NVIDIA NIM (Recommended)</option>
+            <option value="groq">Groq</option>
+            <option value="auto">Auto (Failover)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="settingsOwnerNumber">Authorized Owner WhatsApp Number (International format, digits only)</label>
+          <input id="settingsOwnerNumber" type="text" placeholder="e.g. 923001234567">
+          <span class="form-hint">Number allowed to issue owner commands and bypass triggers in self-chat.</span>
+        </div>
+        <div class="form-group">
+          <label for="settingsNvidiaKeys">NVIDIA API Keys (BYOK, comma-separated)</label>
+          <input id="settingsNvidiaKeys" type="password" placeholder="Leave empty to use configured keys">
+          <span id="nvidiaKeyStatus" class="key-status-text">Status: Checking...</span>
+        </div>
+        <div class="form-group">
+          <label for="settingsGroqKeys">Groq API Keys (BYOK, comma-separated)</label>
+          <input id="settingsGroqKeys" type="password" placeholder="Leave empty to use configured keys">
+          <span id="groqKeyStatus" class="key-status-text">Status: Checking...</span>
+        </div>
+        <div class="form-group">
+          <label for="settingsSystemPrompt">Custom System Prompt (Optional)</label>
+          <textarea id="settingsSystemPrompt" rows="4" placeholder="Leave empty to use default system prompt"></textarea>
+        </div>
+        <div id="settingsSuccess" class="form-success" hidden>Settings saved successfully!</div>
+        <div id="settingsError" class="form-error" hidden></div>
+        <div class="form-actions space-between">
+          <button id="saveSettingsBtn" class="button-primary" type="submit">Save Changes</button>
+          <button id="cancelSettingsBtn" type="button">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin User Management Modal -->
+  <div id="adminModal" class="modal-overlay" hidden>
+    <div class="modal-card modal-lg" role="dialog" aria-labelledby="adminTitle">
+      <div class="modal-header">
+        <h2 id="adminTitle" class="modal-title">Admin Management Console</h2>
+        <button id="closeAdminBtn" class="modal-close-btn" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="admin-content">
+        <div class="admin-top-actions">
+          <h3 class="admin-section-title">User Accounts</h3>
+          <button id="showAddUserBtn" class="button-primary" type="button">+ Add User</button>
+        </div>
+
+        <div id="addUserFormContainer" class="add-user-box" hidden>
+          <form id="addUserForm">
+            <h4 class="box-title">Create New Tenant User</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="newUsername">Username</label>
+                <input id="newUsername" type="text" required>
+              </div>
+              <div class="form-group">
+                <label for="newPassword">Password</label>
+                <input id="newPassword" type="password" required>
+              </div>
+              <div class="form-group">
+                <label for="newRole">Role</label>
+                <select id="newRole" class="form-select">
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="newOwnerNumber">Owner Phone Number</label>
+                <input id="newOwnerNumber" type="text" placeholder="e.g. 923001234567">
+              </div>
+              <div class="form-group">
+                <label for="newProvider">Default Provider</label>
+                <select id="newProvider" class="form-select">
+                  <option value="nvidia">NVIDIA</option>
+                  <option value="groq">Groq</option>
+                </select>
+              </div>
+            </div>
+            <div id="addUserError" class="form-error" hidden></div>
+            <div class="form-actions">
+              <button class="button-primary" type="submit">Create Account</button>
+              <button id="cancelAddUserBtn" type="button">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>WhatsApp Bot</th>
+                <th>Messages</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr><td colspan="6" class="text-center">Loading users...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

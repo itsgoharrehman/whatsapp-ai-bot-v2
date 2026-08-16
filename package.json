@@ -1,0 +1,19 @@
+{
+  "name": "whatsapp-ai-bot-fixed",
+  "version": "1.0.0",
+  "description": "Mark Zuckerberg — Gohar's Personal AI Assistant",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/runner.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.9",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "groq-sdk": "^0.5.0",
+    "pino": "^8.20.0",
+    "qrcode": "^1.5.3"
+  }
+}

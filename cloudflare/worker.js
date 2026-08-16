@@ -79,6 +79,7 @@ export default {
         resHeaders.set('Access-Control-Allow-Origin', '*');
         resHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         resHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        resHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
 
         return new Response(response.body, {
           status: response.status,

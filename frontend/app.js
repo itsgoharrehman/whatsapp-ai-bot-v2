@@ -155,6 +155,8 @@
     }
   }
 
+  let isAutoStarting = false;
+
   async function pollStatus() {
     try {
       const data = await apiFetch('/api/status');
@@ -162,7 +164,15 @@
       const isConnected = data.connected === true || data.status === 'CONNECTED';
       const isQrReady = Boolean(data.qr_code || data.qr || data.qrCodeDataUrl);
 
-      // Ultra-fast 1s polling while connecting / awaiting pairing, 3s once connected
+      // If disconnected without QR, auto-trigger session start
+      if (!isConnected && !isQrReady && !isAutoStarting && data.status === 'DISCONNECTED') {
+        isAutoStarting = true;
+        apiFetch('/api/control/start', { method: 'POST' })
+          .catch(() => {})
+          .finally(() => { setTimeout(() => { isAutoStarting = false; }, 3000); });
+      }
+
+      // Fast 1s polling while connecting / awaiting pairing, 3s once connected
       const nextDelay = !isConnected ? 1000 : 3000;
       if (statusInterval) clearTimeout(statusInterval);
       statusInterval = setTimeout(pollStatus, nextDelay);
@@ -170,7 +180,7 @@
       if (dom.statusDot) dom.statusDot.className = 'status-dot';
       if (dom.statusText) dom.statusText.textContent = 'Disconnected';
       if (statusInterval) clearTimeout(statusInterval);
-      statusInterval = setTimeout(pollStatus, 3000);
+      statusInterval = setTimeout(pollStatus, 2000);
     }
   }
 

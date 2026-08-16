@@ -82,7 +82,7 @@ export function createServer() {
         sessionManager.startSession(userId);
       } else if (action === 'stop') {
         await sessionManager.stopSession(userId);
-      } else if (action === 'reset') {
+      } else if (action === 'reset' || action === 'reset_session') {
         logger.forUser(userId).warn('Alwaysdata: Initiated Session Reset & QR Re-generation');
         await sessionManager.resetSession(userId);
         setTimeout(() => sessionManager.startSession(userId, true), 1000);
@@ -147,10 +147,10 @@ export function createServer() {
   });
 
   // =========================================================================
-  // Public Authentication Endpoints (Control Plane)
+  // Public Authentication Endpoints (Control Plane & Frontend 2.0)
   // =========================================================================
 
-  app.post('/api/auth/login', (req, res) => {
+  const handleLogin = (req, res) => {
     const { username, password } = req.body || {};
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
@@ -161,20 +161,43 @@ export function createServer() {
     }
     const token = db.createWebSession(user.id);
     res.setHeader('Set-Cookie', `session_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`);
-    res.json({ success: true, token, user });
-  });
+    res.json({
+      success: true,
+      authenticated: true,
+      token,
+      user,
+      username: user.username,
+      role: user.role,
+      is_admin: user.role === 'admin'
+    });
+  };
 
-  app.post('/api/auth/logout', requireAuth, (req, res) => {
+  app.post('/api/auth/login', handleLogin);
+  app.post('/api/login', handleLogin);
+
+  const handleLogout = (req, res) => {
     if (req.sessionToken) {
       db.deleteWebSession(req.sessionToken);
     }
     res.setHeader('Set-Cookie', `session_token=; Path=/; HttpOnly; Max-Age=0`);
     res.json({ success: true });
-  });
+  };
 
-  app.get('/api/auth/me', requireAuth, (req, res) => {
-    res.json({ user: req.user });
-  });
+  app.post('/api/auth/logout', requireAuth, handleLogout);
+  app.post('/api/logout', requireAuth, handleLogout);
+
+  const handleMe = (req, res) => {
+    res.json({
+      authenticated: true,
+      user: req.user,
+      username: req.user.username,
+      role: req.user.role,
+      is_admin: req.user.role === 'admin'
+    });
+  };
+
+  app.get('/api/auth/me', requireAuth, handleMe);
+  app.get('/api/me', requireAuth, handleMe);
 
   // =========================================================================
   // User-Scoped WhatsApp & Dashboard Endpoints (Control Plane -> Alwaysdata Gateway)
@@ -227,53 +250,71 @@ export function createServer() {
     req.on('close', () => logger.off('log', logHandler));
   });
 
-  app.post('/api/control/start', requireAuth, async (req, res) => {
-    if (config.alwaysdataBaseUrl) {
-      try {
-        const response = await forwardToAlwaysdata('POST', `/internal/control/${req.user.id}/start`);
-        if (response && response.ok) return res.json({ success: true });
-      } catch (err) {}
-    }
-    sessionManager.startSession(req.user.id);
-    res.json({ success: true });
-  });
+  const handleControl = async (req, res) => {
+    const action = req.params.action || req.body?.action;
+    if (!action) return res.status(400).json({ error: 'Action parameter required' });
 
-  app.post('/api/control/stop', requireAuth, async (req, res) => {
     if (config.alwaysdataBaseUrl) {
       try {
-        const response = await forwardToAlwaysdata('POST', `/internal/control/${req.user.id}/stop`);
-        if (response && response.ok) return res.json({ success: true });
+        const response = await forwardToAlwaysdata('POST', `/internal/control/${req.user.id}/${action}`);
+        if (response && response.ok) return res.json({ success: true, message: `Action ${action} requested` });
       } catch (err) {}
     }
-    await sessionManager.stopSession(req.user.id);
-    res.json({ success: true });
-  });
 
-  app.post('/api/control/reset_session', requireAuth, async (req, res) => {
-    if (config.alwaysdataBaseUrl) {
-      try {
-        const response = await forwardToAlwaysdata('POST', `/internal/control/${req.user.id}/reset`);
-        if (response && response.ok) return res.json({ success: true, message: 'Session reset.' });
-      } catch (err) {}
+    if (action === 'start') {
+      sessionManager.startSession(req.user.id);
+    } else if (action === 'stop') {
+      await sessionManager.stopSession(req.user.id);
+    } else if (action === 'reset' || action === 'reset_session') {
+      logger.forUser(req.user.id).warn('Dashboard: Initiated Session Reset & QR Re-generation');
+      await sessionManager.resetSession(req.user.id);
+      setTimeout(() => sessionManager.startSession(req.user.id, true), 1000);
     }
-    logger.forUser(req.user.id).warn('Dashboard: Initiated Session Reset & QR Re-generation');
-    await sessionManager.resetSession(req.user.id);
-    setTimeout(() => sessionManager.startSession(req.user.id, true), 1000);
-    res.json({ success: true, message: 'Session reset. Generating new QR code...' });
-  });
+    res.json({ success: true, message: `Action ${action} executed` });
+  };
+
+  app.post('/api/control', requireAuth, handleControl);
+  app.post('/api/control/:action', requireAuth, handleControl);
 
   // User Settings & BYOK API Keys (Encrypted at rest)
   app.get('/api/settings', requireAuth, (req, res) => {
+    const settings = db.getUserSettings(req.user.id);
+    const keys = db.getMaskedUserApiKeys(req.user.id);
+    const rawKeys = db.getUserApiKeys(req.user.id);
     res.json({
-      settings: db.getUserSettings(req.user.id),
-      keys: db.getMaskedUserApiKeys(req.user.id)
+      provider: settings.provider || 'auto',
+      owner_number: settings.ownerNumber || '',
+      ownerNumber: settings.ownerNumber || '',
+      nvidia_keys: keys.nvidiaKeysMasked || [],
+      nvidiaKeys: keys.nvidiaKeysMasked || [],
+      groq_keys: keys.groqKeysMasked || [],
+      groqKeys: keys.groqKeysMasked || [],
+      system_prompt: settings.systemPrompt || '',
+      systemPrompt: settings.systemPrompt || '',
+      nvidia_valid: (rawKeys.nvidiaKeys || []).length > 0,
+      groq_valid: (rawKeys.groqKeys || []).length > 0,
+      settings,
+      keys
     });
   });
 
   app.post('/api/settings', requireAuth, async (req, res) => {
-    const { settings, groqKeys, nvidiaKeys } = req.body || {};
-    if (settings && typeof settings === 'object') {
-      db.updateUserSettings(req.user.id, settings);
+    const body = req.body || {};
+    const settingsObj = body.settings || {};
+    
+    const provider = body.provider || settingsObj.provider;
+    const ownerNumber = body.owner_number || body.ownerNumber || settingsObj.ownerNumber;
+    const systemPrompt = body.system_prompt !== undefined ? body.system_prompt : (body.systemPrompt !== undefined ? body.systemPrompt : settingsObj.systemPrompt);
+    const groqKeys = body.groq_keys || body.groqKeys;
+    const nvidiaKeys = body.nvidia_keys || body.nvidiaKeys;
+
+    const newSettings = {};
+    if (provider) newSettings.provider = provider;
+    if (ownerNumber !== undefined) newSettings.ownerNumber = ownerNumber;
+    if (systemPrompt !== undefined) newSettings.systemPrompt = systemPrompt;
+
+    if (Object.keys(newSettings).length > 0) {
+      db.updateUserSettings(req.user.id, newSettings);
     }
     if (Array.isArray(groqKeys) || Array.isArray(nvidiaKeys)) {
       db.setUserApiKeys(req.user.id, { groqKeys, nvidiaKeys });
@@ -281,6 +322,7 @@ export function createServer() {
 
     const currentKeys = db.getUserApiKeys(req.user.id);
     const currentSettings = db.getUserSettings(req.user.id);
+    const masked = db.getMaskedUserApiKeys(req.user.id);
 
     // Sync to in-memory runtime on Alwaysdata
     if (config.alwaysdataBaseUrl) {
@@ -303,27 +345,55 @@ export function createServer() {
 
     res.json({
       success: true,
+      provider: currentSettings.provider,
+      owner_number: currentSettings.ownerNumber,
+      ownerNumber: currentSettings.ownerNumber,
+      system_prompt: currentSettings.systemPrompt,
+      systemPrompt: currentSettings.systemPrompt,
+      nvidia_keys: masked.nvidiaKeysMasked,
+      groq_keys: masked.groqKeysMasked,
+      nvidia_valid: (currentKeys.nvidiaKeys || []).length > 0,
+      groq_valid: (currentKeys.groqKeys || []).length > 0,
       settings: currentSettings,
-      keys: db.getMaskedUserApiKeys(req.user.id)
+      keys: masked
     });
   });
 
   // =========================================================================
-  // Admin Management Endpoints (Control Plane)
+  // Admin Management Endpoints (Control Plane & Frontend 2.0)
   // =========================================================================
 
   app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
-    res.json({ users: sessionManager.getAllSessionsStatus() });
+    const list = sessionManager.getAllSessionsStatus().map(u => {
+      const settings = db.getUserSettings(u.id);
+      return {
+        ...u,
+        owner_number: settings.ownerNumber || '',
+        ownerNumber: settings.ownerNumber || '',
+        provider: settings.provider || 'auto',
+        is_admin: u.role === 'admin'
+      };
+    });
+    res.json({ users: list, count: list.length });
   });
 
   app.post('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
     try {
-      const { username, password, role, settings, groqKeys, nvidiaKeys } = req.body || {};
+      const body = req.body || {};
+      const username = body.username;
+      const password = body.password;
+      const role = body.role || 'user';
+      const ownerNumber = body.owner_number || body.ownerNumber || body.settings?.ownerNumber;
+      const provider = body.provider || body.settings?.provider;
+      const groqKeys = body.groq_keys || body.groqKeys;
+      const nvidiaKeys = body.nvidia_keys || body.nvidiaKeys;
+
       if (!username || !password) {
         return res.status(400).json({ error: 'Username and password are required' });
       }
       const newUser = db.createUser(username, password, role, {
-        ...(settings || {}),
+        ownerNumber,
+        provider,
         groqKeys,
         nvidiaKeys
       });
@@ -338,11 +408,18 @@ export function createServer() {
       const targetUserId = req.params.id;
       const updates = req.body || {};
       const updated = db.updateUser(targetUserId, updates);
-      if (updates.settings) {
-        db.updateUserSettings(targetUserId, updates.settings);
+      if (updates.settings || updates.owner_number || updates.ownerNumber || updates.provider) {
+        db.updateUserSettings(targetUserId, {
+          ...(updates.settings || {}),
+          ownerNumber: updates.owner_number || updates.ownerNumber || updates.settings?.ownerNumber,
+          provider: updates.provider || updates.settings?.provider
+        });
       }
-      if (updates.groqKeys || updates.nvidiaKeys) {
-        db.setUserApiKeys(targetUserId, { groqKeys: updates.groqKeys, nvidiaKeys: updates.nvidiaKeys });
+      if (updates.groq_keys || updates.groqKeys || updates.nvidia_keys || updates.nvidiaKeys) {
+        db.setUserApiKeys(targetUserId, {
+          groqKeys: updates.groq_keys || updates.groqKeys,
+          nvidiaKeys: updates.nvidia_keys || updates.nvidiaKeys
+        });
       }
       res.json({ success: true, user: updated });
     } catch (err) {
@@ -350,25 +427,35 @@ export function createServer() {
     }
   });
 
-  app.delete('/api/admin/users/:id', requireAuth, requireAdmin, async (req, res) => {
+  const handleDeleteUser = async (req, res) => {
     try {
-      const targetUserId = req.params.id;
-      if (targetUserId === req.user.id) {
+      const targetUserId = req.params.id || req.body?.id || req.body?.username;
+      if (!targetUserId) {
+        return res.status(400).json({ error: 'User identifier required' });
+      }
+      const user = db.data.users[targetUserId] || db.getUserByUsername(targetUserId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      if (user.id === req.user.id) {
         return res.status(400).json({ error: 'Cannot delete your own admin account' });
       }
       if (config.alwaysdataBaseUrl) {
         try {
-          await forwardToAlwaysdata('DELETE', `/internal/users/${targetUserId}`);
+          await forwardToAlwaysdata('DELETE', `/internal/users/${user.id}`);
         } catch (err) {}
       }
-      await sessionManager.stopSession(targetUserId);
-      await sessionManager.resetSession(targetUserId);
-      const deleted = db.deleteUser(targetUserId);
+      await sessionManager.stopSession(user.id);
+      await sessionManager.resetSession(user.id);
+      const deleted = db.deleteUser(user.id);
       res.json({ success: deleted });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
-  });
+  };
+
+  app.delete('/api/admin/users/:id', requireAuth, requireAdmin, handleDeleteUser);
+  app.post('/api/admin/users/delete', requireAuth, requireAdmin, handleDeleteUser);
 
   app.post('/api/admin/users/:id/action', requireAuth, requireAdmin, async (req, res) => {
     try {
@@ -387,7 +474,7 @@ export function createServer() {
         sessionManager.startSession(targetUserId);
       } else if (action === 'stop') {
         await sessionManager.stopSession(targetUserId);
-      } else if (action === 'reset') {
+      } else if (action === 'reset' || action === 'reset_session') {
         await sessionManager.resetSession(targetUserId);
         setTimeout(() => sessionManager.startSession(targetUserId, true), 1000);
       }
@@ -397,8 +484,6 @@ export function createServer() {
     }
   });
 
-  app.get(['/admin', '/admin.html'], (req, res) => res.sendFile(path.join(ROOT_DIR, 'frontend', 'admin.html')));
-  app.get('*', (req, res) => res.sendFile(path.join(ROOT_DIR, 'frontend', 'index.html')));
   return app;
 }
 

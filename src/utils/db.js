@@ -184,7 +184,12 @@ class JsonDatabase {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       const tempPath = `${this.filePath}.tmp`;
       fs.writeFileSync(tempPath, JSON.stringify(this.data, null, 2), 'utf8');
-      fs.renameSync(tempPath, this.filePath);
+      try {
+        fs.renameSync(tempPath, this.filePath);
+      } catch (renameErr) {
+        fs.copyFileSync(tempPath, this.filePath);
+        try { fs.unlinkSync(tempPath); } catch (uErr) {}
+      }
     } catch (err) {
       logger.error('Error saving database:', err.message);
     }

@@ -1,120 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
-  <title>Admin Console — WhatsApp AI Bot</title>
-  <link rel="stylesheet" href="style.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="Admin console for multi-tenant WhatsApp AI assistant user management." />
+  <title>Admin Console — WhatsApp AI</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body class="admin-body">
-  <header class="topbar admin-topbar">
-    <div class="topbar-inner">
-      <div class="identity">
-        <h1 class="brand">Admin Console</h1>
-        <span class="subtitle">Multi-Tenant Management</span>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+
+  <div class="app" id="app" hidden>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="brand-name">Admin Console</span>
+          <span class="brand-sub">WhatsApp AI · Tenant Management</span>
+        </div>
+        <span class="topbar-spacer"></span>
+        <span class="env-label">Production</span>
+        <nav class="nav-desktop" aria-label="Primary">
+          <a href="index.html" class="nav-link">Dashboard</a>
+          <button type="button" class="btn-ghost" id="btnSignOut">Sign Out</button>
+        </nav>
+        <button type="button" class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false" aria-controls="mobileNav">
+          <span></span><span></span><span></span>
+        </button>
       </div>
-      <div class="topbar-meta">
-        <!-- Desktop Nav -->
-        <div class="topbar-actions admin-desktop-actions">
-          <a class="nav-link" href="index.html">&larr; Back to Dashboard</a>
-          <button id="adminLogoutBtn" class="nav-btn" type="button">Sign Out</button>
+      <nav class="mobile-nav" id="mobileNav" aria-label="Mobile">
+        <div class="mobile-nav-inner">
+          <a href="index.html">Dashboard</a>
+          <button type="button" id="btnSignOutM">Sign Out</button>
+        </div>
+      </nav>
+    </header>
+
+    <main class="main" id="main">
+      <div class="admin-grid">
+        <!-- Create form -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">Create Tenant User</span>
+          </div>
+          <div class="panel-body">
+            <div class="feedback ok" id="adminOk" role="status"></div>
+            <div class="feedback err" id="adminErr" role="alert"></div>
+            <form id="createUserForm" novalidate>
+              <div class="field">
+                <label for="newUsername">Username</label>
+                <input type="text" id="newUsername" name="username" autocomplete="off" required />
+              </div>
+              <div class="field">
+                <label for="newPassword">Password</label>
+                <input type="password" id="newPassword" name="password" autocomplete="new-password" required />
+              </div>
+              <div class="field">
+                <label for="newRole">Role</label>
+                <select id="newRole" name="role">
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="newOwnerNumber">Owner WhatsApp Number</label>
+                <input type="text" id="newOwnerNumber" name="ownerNumber" placeholder="e.g. 15551234567" inputmode="numeric" />
+              </div>
+              <div class="field">
+                <label for="newProvider">Default AI Provider</label>
+                <select id="newProvider" name="provider">
+                  <option value="auto">Auto</option>
+                  <option value="nvidia">NVIDIA NIM</option>
+                  <option value="groq">Groq</option>
+                </select>
+              </div>
+              <div class="control-row" style="margin-top:4px;">
+                <button type="submit" class="btn-primary" id="btnCreateUser">Create User</button>
+                <button type="button" id="btnCancelCreate">Cancel</button>
+              </div>
+            </form>
+          </div>
         </div>
 
-        <!-- Mobile Hamburger Menu -->
-        <div class="mobile-menu-wrapper">
-          <button id="adminHamburgerBtn" class="hamburger-btn" type="button" aria-label="Toggle navigation menu">
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
-          <div id="adminMobileMenu" class="mobile-nav-box" hidden>
-            <a class="mobile-nav-item" href="index.html">&larr; Dashboard</a>
-            <button id="mobileAdminLogoutBtn" class="mobile-nav-item item-danger" type="button">Sign Out</button>
+        <!-- User list -->
+        <div class="panel">
+          <div class="panel-head">
+            <span class="panel-title">Tenant Users</span>
+            <span class="panel-title-sub" id="userCount" style="margin-left:auto;">0 users</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data" id="userTable">
+              <thead>
+                <tr>
+                  <th scope="col">Username</th>
+                  <th scope="col">Role</th>
+                  <th scope="col">Owner Number</th>
+                  <th scope="col">Provider</th>
+                  <th scope="col" style="text-align:right;">Action</th>
+                </tr>
+              </thead>
+              <tbody id="userTableBody">
+                <tr><td colspan="5" style="color:var(--text-muted);">Loading users…</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>
-    </div>
-  </header>
-
-  <main class="page admin-page">
-    <div class="admin-container">
-      <div class="admin-header-row">
-        <div>
-          <h2 class="section-heading">Tenant Accounts</h2>
-          <p class="section-subheading">Manage users, bot session lifecycle, and provider configurations.</p>
-        </div>
-        <button id="toggleAddUserBtn" class="button-primary" type="button">+ Create User</button>
-      </div>
-
-      <!-- Add User Form Container -->
-      <div id="addUserBox" class="admin-card" hidden>
-        <h3 class="card-heading">Create New Tenant User</h3>
-        <form id="createUserForm" class="admin-form">
-          <div class="form-grid">
-            <div class="form-group">
-              <label for="newUsername">Username</label>
-              <input id="newUsername" type="text" required autocomplete="off">
-            </div>
-            <div class="form-group">
-              <label for="newPassword">Password</label>
-              <input id="newPassword" type="password" required autocomplete="new-password">
-            </div>
-            <div class="form-group">
-              <label for="newRole">Role</label>
-              <select id="newRole" class="form-select">
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="newOwnerNumber">Owner Phone (International digits)</label>
-              <input id="newOwnerNumber" type="text" placeholder="e.g. 923001234567">
-            </div>
-            <div class="form-group">
-              <label for="newProvider">Provider</label>
-              <select id="newProvider" class="form-select">
-                <option value="nvidia">NVIDIA</option>
-                <option value="groq">Groq</option>
-                <option value="auto">Auto (Failover)</option>
-              </select>
-            </div>
-          </div>
-          <div id="createUserError" class="form-error" hidden></div>
-          <div class="form-actions">
-            <button class="button-primary" type="submit">Create Account</button>
-            <button id="cancelCreateUserBtn" type="button">Cancel</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Users Table -->
-      <div class="admin-card">
-        <div class="table-wrap">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>Role</th>
-                <th>Account</th>
-                <th>WhatsApp Bot</th>
-                <th>Messages</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <tr>
-                <td colspan="6" class="table-loading">Loading users...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </main>
+    </main>
+  </div>
 
   <script src="admin.js"></script>
 </body>

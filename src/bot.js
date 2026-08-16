@@ -352,14 +352,28 @@ export class UserBotSession extends EventEmitter {
   }
 
   getStatus() {
+    const analytics = db.getAnalytics(this.userId) || { totalMessages: 0, totalReplies: 0 };
+    const autoReply = db.getAutoReply(this.userId);
     return {
       userId: this.userId,
       status: this.status,
+      connection: this.status.toLowerCase(),
+      connected: this.status === 'CONNECTED',
       qrCodeDataUrl: this.qrCodeDataUrl,
+      qr: this.qrCodeDataUrl,
       botJid: this.botJid,
       botLid: this.botLid,
-      autoReply: db.getAutoReply(this.userId),
-      analytics: db.getAnalytics(this.userId),
+      autoReply: autoReply,
+      auto_reply: autoReply,
+      operating_mode: 'Multi-Tenant Standard',
+      mode: 'Standard',
+      active_key_index: this.aiProvider.groqKeyIndex || 0,
+      key_index: this.aiProvider.groqKeyIndex || 0,
+      messages_processed: analytics.totalMessages || 0,
+      total_messages: analytics.totalMessages || 0,
+      ai_replies: analytics.totalReplies || 0,
+      total_replies: analytics.totalReplies || 0,
+      analytics: analytics,
       aiStatus: this.aiProvider.getStatus(),
       groqStatus: this.aiProvider.getStatus(),
       ownerNumber: this.getOwnerNumber()

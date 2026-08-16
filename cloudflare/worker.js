@@ -76,11 +76,6 @@ export default {
 
     // Serve Static Assets (frontend HTML, CSS, JS) via Cloudflare Assets
     if (env.ASSETS) {
-      if (url.pathname === '/admin' || url.pathname === '/admin/') {
-        const adminUrl = new URL('/admin.html', request.url);
-        return env.ASSETS.fetch(new Request(adminUrl, request));
-      }
-
       const assetResponse = await env.ASSETS.fetch(request);
       if (assetResponse.status !== 404) {
         return assetResponse;

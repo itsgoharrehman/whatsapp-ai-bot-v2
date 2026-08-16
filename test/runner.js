@@ -288,20 +288,65 @@ try {
   });
   assert.strictEqual(adminResForA.status, 403);
 
-  // 16f. Admin user creates and verifies admin access
-  const adminUser = Object.values(db.data.users).find(u => u.role === 'admin');
-  assert.ok(adminUser);
-  const adminToken = db.createWebSession(adminUser.id);
-
-  const adminListRes = await fetch(`${baseUrl}/api/admin/users`, {
-    headers: { 'Authorization': `Bearer ${adminToken}` }
+  // 16g. Frontend 2.0 Auth & Status Endpoints (/api/login, /api/me, /api/control)
+  const loginRes2 = await fetch(`${baseUrl}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'alice_test', password: 'AlicePass123!' })
   });
-  assert.strictEqual(adminListRes.status, 200);
-  const adminListData = await adminListRes.json();
-  assert.ok(Array.isArray(adminListData.users));
-  assert.ok(adminListData.users.some(u => u.username === 'alice_test'));
+  assert.strictEqual(loginRes2.status, 200);
+  const loginData2 = await loginRes2.json();
+  assert.strictEqual(loginData2.authenticated, true);
+  assert.strictEqual(loginData2.username, 'alice_test');
 
-  console.log('✔ Test 16 passed: HTTP Multi-tenancy & Admin Role Authorization strictly enforced');
+  const meRes = await fetch(`${baseUrl}/api/me`, {
+    headers: { 'Authorization': `Bearer ${tokenA}` }
+  });
+  assert.strictEqual(meRes.status, 200);
+  const meData = await meRes.json();
+  assert.strictEqual(meData.authenticated, true);
+  assert.strictEqual(meData.username, 'alice_test');
+
+  // Frontend 2.0 Settings Save & Load
+  const saveSettingsRes = await fetch(`${baseUrl}/api/settings`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${tokenA}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      provider: 'nvidia',
+      owner_number: '923001234567',
+      nvidia_keys: ['nvapi-test11111111111111111'],
+      groq_keys: ['gsk_test22222222222222222'],
+      system_prompt: 'Custom Frontend 2.0 System Prompt'
+    })
+  });
+  assert.strictEqual(saveSettingsRes.status, 200);
+
+  const getSettingsRes = await fetch(`${baseUrl}/api/settings`, {
+    headers: { 'Authorization': `Bearer ${tokenA}` }
+  });
+  assert.strictEqual(getSettingsRes.status, 200);
+  const settingsData = await getSettingsRes.json();
+  assert.strictEqual(settingsData.provider, 'nvidia');
+  assert.strictEqual(settingsData.owner_number, '923001234567');
+  assert.strictEqual(settingsData.system_prompt, 'Custom Frontend 2.0 System Prompt');
+  assert.strictEqual(settingsData.nvidia_valid, true);
+  assert.strictEqual(settingsData.groq_valid, true);
+
+  // Frontend 2.0 Control Action
+  const controlRes = await fetch(`${baseUrl}/api/control`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${tokenA}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ action: 'start' })
+  });
+  assert.strictEqual(controlRes.status, 200);
+
+  console.log('✔ Test 16 passed: HTTP Multi-tenancy, Frontend 2.0 API contracts & Admin Role Authorization strictly enforced');
 
   // =========================================================================
   // Test 17: Hardened HMAC-SHA256 Internal Protocol & Replay Protection

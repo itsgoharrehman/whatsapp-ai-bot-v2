@@ -174,14 +174,16 @@ export class UserBotSession extends EventEmitter {
 
         if (connection === 'close') {
           const statusCode = lastDisconnect?.error?.output?.statusCode;
-          const isLoggedOut = statusCode === DisconnectReason?.loggedOut;
+          const isLoggedOut = statusCode === DisconnectReason?.loggedOut || statusCode === 401;
           
           this.userLogger.warn(`[SYSTEM] WhatsApp connection closed (Status code: ${statusCode || 'unknown'}). Reconnecting: ${!isLoggedOut}`);
           this.qrCodeDataUrl = null;
           this.status = 'DISCONNECTED';
           this.emit('status', this.status);
 
-          if (!this.isStopping && !isLoggedOut) {
+          if (isLoggedOut) {
+            this.resetSession().catch(() => {});
+          } else if (!this.isStopping) {
             if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
             const delay = statusCode === 515 ? 1000 : 3000;
             this.reconnectTimer = setTimeout(() => this.start(false), delay);

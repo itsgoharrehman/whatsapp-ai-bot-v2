@@ -213,29 +213,17 @@ export class UserBotSession extends EventEmitter {
         if (connection === 'close') {
           const statusCode = lastDisconnect?.error?.output?.statusCode;
           const isLoggedOut = statusCode === DisconnectReason?.loggedOut || statusCode === 401;
-          const isTimeout = statusCode === DisconnectReason?.timedOut || statusCode === 408 || statusCode === 428;
-          const isRestartRequired = statusCode === DisconnectReason?.restartRequired || statusCode === 515;
 
-          this.userLogger.warn(`[SYSTEM] WhatsApp connection closed (Status code: ${statusCode || 'unknown'}). Auto-recovering...`);
+          this.userLogger.warn(`[SYSTEM] WhatsApp connection closed (Status code: ${statusCode || 'unknown'}).`);
           this.qrCodeDataUrl = null;
           this.status = 'DISCONNECTED';
           this.emit('status', this.status);
 
-          if (this.isStopping) return;
+          if (this.isStopping || isLoggedOut) return;
 
-          if (isLoggedOut || isTimeout) {
-            // Auto-purge stale session and immediately trigger fresh QR generation
-            this.resetSession()
-              .then(() => {
-                if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-                this.reconnectTimer = setTimeout(() => this.start(false), 500);
-              })
-              .catch(() => {});
-          } else {
-            if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            const delay = isRestartRequired ? 500 : 2000;
-            this.reconnectTimer = setTimeout(() => this.start(false), delay);
-          }
+          if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+          const delay = statusCode === 515 ? 1000 : 3000;
+          this.reconnectTimer = setTimeout(() => this.start(false), delay);
         }
       });
 

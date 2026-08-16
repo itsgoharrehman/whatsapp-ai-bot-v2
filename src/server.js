@@ -407,9 +407,6 @@ export function createServer() {
     }
     if (!st) {
       st = sessionManager.getStatus(req.user.id);
-      if (st.status === 'DISCONNECTED' && !st.qrCodeDataUrl) {
-        sessionManager.startSession(req.user.id);
-      }
     }
 
     const isConnected = st.status === 'CONNECTED';

@@ -1,422 +1,583 @@
-/* ===================================================================
-   WhatsApp AI Assistant — Main application logic
-   Preserves all element IDs and API contracts:
-     GET  /api/status
-     GET  /api/logs        (+ EventSource /api/logs/stream fallback)
-     POST /api/control     { action: start | stop | reset_session }
-     POST /api/login  /api/logout   GET /api/me
-     GET/POST /api/settings
-   =================================================================== */
+/* ===== WA Bot — Main Dashboard Logic ===== */
 (function () {
-    "use strict";
+  'use strict';
 
-    const $ = (id) => document.getElementById(id);
-    const api = async (url, opts = {}) => {
-        const res = await fetch(url, {
-            headers: { "Content-Type": "application/json" },
-            credentials: "same-origin",
-            ...opts,
-        });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const ct = res.headers.get("content-type") || "";
-        return ct.includes("application/json") ? res.json() : res.text();
-    };
+  /* ----- DOM refs ----- */
+  const $ = (id) => document.getElementById(id);
 
-    const state = {
-        connected: false,
-        currentUser: null,
-        statusTimer: null,
-        logTimer: null,
-        logSource: null,
-        lastLogId: 0,
-    };
+  const dom = {
+    loginModal:       $('loginModal'),
+    loginForm:        $('loginForm'),
+    loginUsername:    $('loginUsername'),
+    loginPassword:    $('loginPassword'),
+    loginBtn:         $('loginBtn'),
+    loginError:       $('loginError'),
 
-    /* ---------------- Auth ---------------- */
-    async function checkAuth() {
-        try {
-            const me = await api("/api/me");
-            if (me && (me.authenticated || me.username)) {
-                state.currentUser = me.user || me;
-                showApp();
-                return true;
-            }
-        } catch (e) { /* fall through to login */ }
-        showLogin();
-        return false;
-    }
+    settingsModal:    $('settingsModal'),
+    settingsForm:     $('settingsForm'),
+    selAiProvider:    $('selAiProvider'),
+    inputOwnerNumber: $('inputOwnerNumber'),
+    inputNvidiaKeys:  $('inputNvidiaKeys'),
+    nvidiaKeyStatus:  $('nvidiaKeyStatus'),
+    inputGroqKeys:    $('inputGroqKeys'),
+    groqKeyStatus:    $('groqKeyStatus'),
+    txtSystemPrompt:  $('txtSystemPrompt'),
+    btnSaveSettings:  $('btnSaveSettings'),
+    btnCancelSettings:$('btnCancelSettings'),
+    settingsFeedback: $('settingsFeedback'),
 
-    function showLogin() {
-        $("loginGate").hidden = false;
-        $("app").hidden = true;
-        setTimeout(() => $("loginUsername") && $("loginUsername").focus(), 30);
-    }
+    mobileMenu:       $('mobileMenu'),
+    hamburgerBtn:     $('hamburgerBtn'),
+    drawerClose:      $('drawerClose'),
+    mobileSettingsBtn:$('mobileSettingsBtn'),
+    mobileAdminBtn:   $('mobileAdminBtn'),
+    mobileSignOutBtn: $('mobileSignOutBtn'),
 
-    function showApp() {
-        $("loginGate").hidden = true;
-        $("app").hidden = false;
-        applyRole();
-        loadSettings().catch(() => { });
-        startStatusPolling();
-        startLogStream();
-    }
+    settingsBtn:      $('settingsBtn'),
+    adminLink:        $('adminLink'),
+    signOutBtn:       $('signOutBtn'),
 
-    function applyRole() {
-        const u = state.currentUser || {};
-        const isAdmin = u.role === "admin" || u.is_admin === true;
-        ["adminLink", "adminLinkM"].forEach((id) => {
-            const el = $(id);
-            if (el) el.hidden = !isAdmin;
-        });
-        if (u.username) {
-            // no-op label hook reserved
-        }
-    }
+    statusDot:        $('statusDot'),
+    statusText:       $('statusText'),
+    brandSubtitle:    $('brandSubtitle'),
+    envLabel:         $('envLabel'),
 
-    async function doLogin(e) {
-        e.preventDefault();
-        hideFeedback($("loginError"));
-        const btn = $("loginBtn");
-        btn.disabled = true;
-        try {
-            const body = JSON.stringify({
-                username: $("loginUsername").value.trim(),
-                password: $("loginPassword").value,
-            });
-            const r = await api("/api/login", { method: "POST", body });
-            state.currentUser = (r && (r.user || r)) || null;
-            $("loginPassword").value = "";
-            showApp();
-        } catch (err) {
-            showFeedback($("loginError"), "Invalid username or password.");
-        } finally {
-            btn.disabled = false;
-        }
-    }
+    pairingView:      $('pairingView'),
+    dashboardView:    $('dashboardView'),
 
-    async function doLogout() {
-        try { await api("/api/logout", { method: "POST" }); } catch (e) { }
-        stopStatusPolling();
-        stopLogStream();
-        state.currentUser = null;
-        showLogin();
-    }
+    btnStart:         $('btnStart'),
+    btnStop:          $('btnStop'),
+    btnNewSession:    $('btnNewSession'),
 
-    /* ---------------- Status polling ---------------- */
-    function startStatusPolling() {
-        fetchStatus();
-        stopStatusPolling();
-        state.statusTimer = setInterval(fetchStatus, 4000);
-    }
-    function stopStatusPolling() {
-        if (state.statusTimer) clearInterval(state.statusTimer);
-        state.statusTimer = null;
-    }
+    qrFrame:         $('qrFrame'),
+    qrLoading:       $('qrLoading'),
+    qrImage:         $('qrImage'),
+    qrConnected:     $('qrConnected'),
+    qrStatusText:    $('qrStatusText'),
 
-    async function fetchStatus() {
-        try {
-            const s = await api("/api/status");
-            renderStatus(s || {});
-        } catch (e) {
-            setConn("disconnected", "Status unavailable");
-        }
-    }
+    metricMode:       $('metricMode'),
+    metricAutoReply:  $('metricAutoReply'),
+    metricKeyIndex:   $('metricKeyIndex'),
+    metricTotalMsgs:  $('metricTotalMsgs'),
+    metricAiReplies:  $('metricAiReplies'),
 
-    function renderStatus(s) {
-        const conn = (s.connection || s.status || "").toLowerCase();
-        const connected = s.connected === true || conn === "connected" || conn === "open";
-        const pairing = conn === "pairing" || conn === "connecting" || (!!s.qr && !connected);
+    btnStopSession:   $('btnStopSession'),
+    btnResetPair:     $('btnResetPair'),
 
-        if (connected) setConn("connected", "Connected");
-        else if (pairing) setConn("pending", "Pairing");
-        else setConn("disconnected", "Disconnected");
+    logStream:        $('logStream'),
+    chkAutoScroll:    $('chkAutoScroll'),
+    btnClearLogs:     $('btnClearLogs'),
+  };
 
-        if (s.environment || s.env) $("envLabel").textContent = s.environment || s.env;
+  /* ----- State ----- */
+  let isAuthenticated = false;
+  let userRole = null;
+  let statusInterval = null;
+  let logEventSource = null;
+  let logPollInterval = null;
+  let lastLogOffset = 0;
 
-        // View switching
-        if (connected !== state.connected) {
-            state.connected = connected;
-            switchView(connected);
-        } else {
-            state.connected = connected;
-        }
+  /* ----- API base ----- */
+  const API = '';
 
-        // QR handling
-        if (!connected) {
-            const stage = $("qrStage");
-            if (s.qr) {
-                const img = $("qrImage");
-                img.src = s.qr.startsWith("data:") || s.qr.startsWith("http")
-                    ? s.qr
-                    : "data:image/png;base64," + s.qr;
-                setQrState("ready", "Ready");
-            } else if (pairing) {
-                setQrState("loading", "Generating");
-            } else {
-                setQrState("loading", "Waiting");
-            }
-        } else {
-            setQrState("connected", "Linked");
-        }
+  /* ----- Helpers ----- */
+  function show(el) { el && el.classList.remove('hidden'); }
+  function hide(el) { el && el.classList.add('hidden'); }
 
-        // Metrics
-        if (connected) renderMetrics(s);
-    }
-
-    function renderMetrics(s) {
-        const set = (id, v) => { const el = $(id); if (el && v !== undefined && v !== null) el.textContent = v; };
-        set("mMode", s.mode || s.operating_mode || "Standard");
-        const auto = s.auto_reply !== undefined ? s.auto_reply : s.autoReply;
-        set("mAutoReply", auto === undefined ? "—" : (auto ? "On" : "Off"));
-        const ki = s.active_key_index !== undefined ? s.active_key_index : s.key_index;
-        set("mKeyIndex", ki === undefined ? "—" : ki);
-        set("mMessages", s.messages_processed ?? s.total_messages ?? 0);
-        set("mReplies", s.ai_replies ?? s.total_replies ?? 0);
-    }
-
-    function switchView(connected) {
-        $("pairingView").classList.toggle("active", !connected);
-        $("dashboardView").classList.toggle("active", connected);
-    }
-
-    function setConn(kind, label) {
-        const dot = $("connDot");
-        dot.className = "status-dot is-" + kind;
-        $("connLabel").textContent = label;
-    }
-
-    function setQrState(st, label) {
-        const stage = $("qrStage");
-        if (stage) stage.setAttribute("data-state", st);
-        const lbl = $("qrStateLabel");
-        if (lbl) lbl.textContent = label;
-    }
-
-    /* ---------------- Control actions ---------------- */
-    async function control(action) {
-        try {
-            await api("/api/control", {
-                method: "POST",
-                body: JSON.stringify({ action }),
-            });
-            appendLog("Requested action: " + action, "info");
-            fetchStatus();
-        } catch (e) {
-            appendLog("Action failed: " + action, "error");
-        }
-    }
-
-    /* ---------------- Logs ---------------- */
-    function startLogStream() {
-        // Prefer SSE, fall back to polling.
-        if (typeof EventSource !== "undefined") {
-            try {
-                const es = new EventSource("/api/logs/stream");
-                es.onmessage = (ev) => {
-                    const line = parseLog(ev.data);
-                    appendLog(line.msg, line.level, line.time);
-                };
-                es.onerror = () => {
-                    es.close();
-                    state.logSource = null;
-                    startLogPolling();
-                };
-                state.logSource = es;
-                return;
-            } catch (e) { /* fall through */ }
-        }
-        startLogPolling();
-    }
-
-    function startLogPolling() {
-        stopLogPolling();
-        fetchLogs();
-        state.logTimer = setInterval(fetchLogs, 3000);
-    }
-
-    function stopLogPolling() {
-        if (state.logTimer) clearInterval(state.logTimer);
-        state.logTimer = null;
-    }
-    function stopLogStream() {
-        if (state.logSource) { state.logSource.close(); state.logSource = null; }
-        stopLogPolling();
-    }
-
-    async function fetchLogs() {
-        try {
-            const data = await api("/api/logs?since=" + state.lastLogId);
-            const items = Array.isArray(data) ? data : (data.logs || []);
-            items.forEach((item) => {
-                if (item.id !== undefined) state.lastLogId = Math.max(state.lastLogId, item.id);
-                const l = normalizeLog(item);
-                appendLog(l.msg, l.level, l.time);
-            });
-        } catch (e) { /* silent */ }
-    }
-
-    function parseLog(raw) {
-        try { return normalizeLog(JSON.parse(raw)); }
-        catch (e) { return { msg: String(raw), level: "info", time: nowTime() }; }
-    }
-    function normalizeLog(item) {
-        if (typeof item === "string") return { msg: item, level: "info", time: nowTime() };
-        return {
-            msg: item.message || item.msg || item.text || "",
-            level: (item.level || item.type || "info").toLowerCase(),
-            time: item.time || item.timestamp || nowTime(),
-        };
-    }
-
-    function nowTime() {
-        return new Date().toLocaleTimeString([], { hour12: false });
-    }
-
-    function appendLog(msg, level, time) {
-        if (!msg) return;
-        const term = $("logTerminal");
-        const empty = term.querySelector(".log-empty");
-        if (empty) empty.remove();
-
-        const line = document.createElement("div");
-        line.className = "log-line";
-        const lvl = ["info", "success", "warn", "error"].includes(level) ? level : "info";
-        const t = document.createElement("span");
-        t.className = "log-time";
-        t.textContent = time || nowTime();
-        const m = document.createElement("span");
-        m.className = "log-" + lvl;
-        m.textContent = msg;
-        line.appendChild(t);
-        line.appendChild(m);
-        term.appendChild(line);
-
-        // cap lines
-        while (term.childElementCount > 500) term.removeChild(term.firstChild);
-
-        if ($("autoScroll").checked) term.scrollTop = term.scrollHeight;
-    }
-
-    function clearLogs() {
-        const term = $("logTerminal");
-        term.innerHTML = '<div class="log-empty">Awaiting events…</div>';
-        state.lastLogId = 0;
-    }
-
-    /* ---------------- Settings ---------------- */
-    async function loadSettings() {
-        try {
-            const s = await api("/api/settings");
-            const g = (k) => s[k] ?? s[k.toLowerCase()];
-            if ($("setProvider")) $("setProvider").value = g("provider") || "auto";
-            if ($("setOwnerNumber")) $("setOwnerNumber").value = g("owner_number") || g("ownerNumber") || "";
-            if ($("setNvidiaKeys")) $("setNvidiaKeys").value = joinKeys(g("nvidia_keys") || g("nvidiaKeys"));
-            if ($("setGroqKeys")) $("setGroqKeys").value = joinKeys(g("groq_keys") || g("groqKeys"));
-            if ($("setSystemPrompt")) $("setSystemPrompt").value = g("system_prompt") || g("systemPrompt") || "";
-            renderKeyStatus("nvidiaKeyStatus", g("nvidia_valid"));
-            renderKeyStatus("groqKeyStatus", g("groq_valid"));
-        } catch (e) { /* settings may be empty */ }
-    }
-
-    function joinKeys(v) {
-        if (!v) return "";
-        return Array.isArray(v) ? v.join(", ") : String(v);
-    }
-    function splitKeys(v) {
-        return String(v || "").split(",").map((k) => k.trim()).filter(Boolean);
-    }
-    function renderKeyStatus(id, valid) {
-        const el = $(id);
-        if (!el) return;
-        el.classList.remove("valid", "invalid");
-        const label = el.querySelector("span:last-child");
-        if (valid === true) { el.classList.add("valid"); label.textContent = "Verified"; }
-        else if (valid === false) { el.classList.add("invalid"); label.textContent = "Invalid or unreachable"; }
-        else { label.textContent = "Not verified"; }
-    }
-
-    async function saveSettings() {
-        hideFeedback($("settingsOk"));
-        hideFeedback($("settingsErr"));
-        const btn = $("settingsSave");
-        btn.disabled = true;
-        try {
-            const payload = {
-                provider: $("setProvider").value,
-                owner_number: $("setOwnerNumber").value.trim(),
-                nvidia_keys: splitKeys($("setNvidiaKeys").value),
-                groq_keys: splitKeys($("setGroqKeys").value),
-                system_prompt: $("setSystemPrompt").value,
-            };
-            const r = await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
-            renderKeyStatus("nvidiaKeyStatus", r && r.nvidia_valid);
-            renderKeyStatus("groqKeyStatus", r && r.groq_valid);
-            showFeedback($("settingsOk"), "Settings saved.");
-        } catch (e) {
-            showFeedback($("settingsErr"), "Could not save settings. Please retry.");
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    function openSettings() {
-        loadSettings().catch(() => { });
-        $("settingsModal").classList.add("open");
-        closeMobileNav();
-        setTimeout(() => $("setProvider") && $("setProvider").focus(), 30);
-    }
-    function closeSettings() {
-        $("settingsModal").classList.remove("open");
-        hideFeedback($("settingsOk"));
-        hideFeedback($("settingsErr"));
-    }
-
-    /* ---------------- Feedback helpers ---------------- */
-    function showFeedback(el, msg) { if (el) { el.textContent = msg; el.classList.add("show"); } }
-    function hideFeedback(el) { if (el) { el.textContent = ""; el.classList.remove("show"); } }
-
-    /* ---------------- Mobile nav ---------------- */
-    function toggleMobileNav() {
-        const nav = $("mobileNav");
-        const open = nav.classList.toggle("open");
-        $("hamburger").setAttribute("aria-expanded", String(open));
-    }
-    function closeMobileNav() {
-        $("mobileNav").classList.remove("open");
-        const h = $("hamburger");
-        if (h) h.setAttribute("aria-expanded", "false");
-    }
-
-    /* ---------------- Wire up ---------------- */
-    function bind() {
-        $("loginForm").addEventListener("submit", doLogin);
-        $("btnSignOut").addEventListener("click", doLogout);
-        $("btnSignOutM").addEventListener("click", doLogout);
-
-        $("btnSettings").addEventListener("click", openSettings);
-        $("btnSettingsM").addEventListener("click", openSettings);
-        $("settingsClose").addEventListener("click", closeSettings);
-        $("settingsCancel").addEventListener("click", closeSettings);
-        $("settingsSave").addEventListener("click", saveSettings);
-        $("settingsModal").addEventListener("click", (e) => {
-            if (e.target === $("settingsModal")) closeSettings();
-        });
-
-        $("btnStart").addEventListener("click", () => control("start"));
-        $("btnStop").addEventListener("click", () => control("stop"));
-        $("btnNewSession").addEventListener("click", () => control("reset_session"));
-        $("btnStopDash").addEventListener("click", () => control("stop"));
-        $("btnResetSession").addEventListener("click", () => control("reset_session"));
-
-        $("btnClearLogs").addEventListener("click", clearLogs);
-        $("hamburger").addEventListener("click", toggleMobileNav);
-
-        document.addEventListener("keydown", (e) => {
-            if (e.key === "Escape") closeSettings();
-        });
-    }
-
-    document.addEventListener("DOMContentLoaded", () => {
-        bind();
-        checkAuth();
+  function fetchJSON(url, options) {
+    return fetch(API + url, {
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      ...options,
+    }).then((r) => {
+      if (r.status === 401) { handleAuthLost(); throw new Error('Unauthorized'); }
+      if (!r.ok) throw new Error('Request failed: ' + r.status);
+      return r.json();
     });
+  }
+
+  function timestamp() {
+    const d = new Date();
+    return d.toTimeString().slice(0, 8);
+  }
+
+  /* ----- Auth ----- */
+  function handleAuthLost() {
+    isAuthenticated = false;
+    userRole = null;
+    show(dom.loginModal);
+    stopPolling();
+    stopLogStream();
+  }
+
+  async function checkAuth() {
+    try {
+      const data = await fetchJSON('/api/auth/me');
+      isAuthenticated = true;
+      userRole = data.role || 'user';
+      hide(dom.loginModal);
+      applyRole();
+      startPolling();
+    } catch {
+      isAuthenticated = false;
+      show(dom.loginModal);
+    }
+  }
+
+  async function doLogin(e) {
+    e.preventDefault();
+    dom.loginError.textContent = '';
+    const username = dom.loginUsername.value.trim();
+    const password = dom.loginPassword.value;
+    if (!username || !password) { dom.loginError.textContent = 'Enter username and password'; return; }
+    try {
+      const data = await fetchJSON('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ username, password }),
+      });
+      isAuthenticated = true;
+      userRole = data.role || 'user';
+      hide(dom.loginModal);
+      applyRole();
+      startPolling();
+    } catch (err) {
+      dom.loginError.textContent = 'Invalid credentials';
+    }
+  }
+
+  async function doSignOut() {
+    try { await fetchJSON('/api/auth/logout', { method: 'POST' }); } catch {}
+    isAuthenticated = false;
+    userRole = null;
+    stopPolling();
+    stopLogStream();
+    show(dom.loginModal);
+    closeMobileMenu();
+  }
+
+  function applyRole() {
+    if (userRole === 'admin') {
+      show(dom.adminLink);
+      show(dom.mobileAdminBtn);
+    } else {
+      hide(dom.adminLink);
+      hide(dom.mobileAdminBtn);
+    }
+  }
+
+  /* ----- Status Polling ----- */
+  function startPolling() {
+    stopPolling();
+    pollStatus();
+    statusInterval = setInterval(pollStatus, 4000);
+  }
+
+  function stopPolling() {
+    if (statusInterval) { clearInterval(statusInterval); statusInterval = null; }
+  }
+
+  async function pollStatus() {
+    try {
+      const data = await fetchJSON('/api/status');
+      updateUI(data);
+    } catch {}
+  }
+
+  /* ----- UI State Switch ----- */
+  function updateUI(data) {
+    const connected = data.connected === true;
+    const qrReady = data.qr_code && !connected;
+
+    /* Top bar status */
+    dom.statusDot.className = 'status-dot' + (connected ? ' connected' : '');
+    dom.statusText.textContent = connected ? 'Connected' : 'Disconnected';
+
+    if (connected) {
+      hide(dom.pairingView);
+      show(dom.dashboardView);
+      hide(dom.brandSubtitle);
+      show(dom.envLabel);
+
+      dom.metricMode.textContent = data.operating_mode || 'Auto';
+      dom.metricAutoReply.textContent = data.auto_reply ? 'On' : 'Off';
+      dom.metricAutoReply.className = 'metric-value' + (data.auto_reply ? ' green' : '');
+      dom.metricKeyIndex.textContent = data.active_key_index != null ? data.active_key_index : '—';
+      dom.metricTotalMsgs.textContent = data.total_messages || 0;
+      dom.metricAiReplies.textContent = data.ai_replies || 0;
+
+      startLogStream();
+    } else {
+      show(dom.pairingView);
+      hide(dom.dashboardView);
+      show(dom.brandSubtitle);
+      hide(dom.envLabel);
+      stopLogStream();
+
+      /* QR states */
+      if (qrReady) {
+        hide(dom.qrLoading);
+        show(dom.qrImage);
+        hide(dom.qrConnected);
+        dom.qrImage.src = data.qr_code;
+        dom.qrStatusText.textContent = 'Scan with WhatsApp to pair';
+      } else if (data.session_loading) {
+        show(dom.qrLoading);
+        hide(dom.qrImage);
+        hide(dom.qrConnected);
+        dom.qrStatusText.textContent = 'Generating QR code...';
+      } else {
+        hide(dom.qrLoading);
+        hide(dom.qrImage);
+        hide(dom.qrConnected);
+        dom.qrStatusText.textContent = 'Waiting for session start';
+      }
+    }
+  }
+
+  /* ----- Log Streaming ----- */
+  function startLogStream() {
+    if (logEventSource || logPollInterval) return;
+
+    /* Try SSE first */
+    try {
+      logEventSource = new EventSource(API + '/api/logs/stream');
+      logEventSource.onmessage = function (ev) {
+        appendLogLine(ev.data);
+      };
+      logEventSource.onerror = function () {
+        /* Fallback to polling */
+        stopLogStream();
+        logPollInterval = setInterval(pollLogs, 3000);
+      };
+    } catch {
+      logPollInterval = setInterval(pollLogs, 3000);
+    }
+  }
+
+  function stopLogStream() {
+    if (logEventSource) { logEventSource.close(); logEventSource = null; }
+    if (logPollInterval) { clearInterval(logPollInterval); logPollInterval = null; }
+  }
+
+  async function pollLogs() {
+    try {
+      const data = await fetchJSON('/api/logs?offset=' + lastLogOffset);
+      if (data && data.logs && data.logs.length) {
+        data.logs.forEach(function (line) { appendLogLine(line); });
+        lastLogOffset += data.logs.length;
+      }
+    } catch {}
+  }
+
+  function appendLogLine(raw) {
+    const line = document.createElement('span');
+    line.className = 'log-line';
+    line.textContent = '[' + timestamp() + '] ' + raw;
+    dom.logStream.appendChild(line);
+    if (dom.chkAutoScroll.checked) {
+      dom.logStream.scrollTop = dom.logStream.scrollHeight;
+    }
+  }
+
+  /* ----- Controls ----- */
+  async function controlAction(endpoint) {
+    try {
+      await fetchJSON('/api/' + endpoint, { method: 'POST' });
+      appendLogLine('Action: ' + endpoint);
+      setTimeout(pollStatus, 800);
+    } catch (err) {
+      appendLogLine('Error: ' + endpoint + ' failed');
+    }
+  }
+
+  /* ----- Settings ----- */
+  async function openSettings() {
+    dom.settingsFeedback.textContent = '';
+    dom.settingsFeedback.className = 'settings-feedback';
+    try {
+      const data = await fetchJSON('/api/settings');
+      dom.selAiProvider.value = data.ai_provider || 'auto';
+      dom.inputOwnerNumber.value = data.owner_number || '';
+      dom.inputNvidiaKeys.value = (data.nvidia_keys || []).join(',');
+      dom.inputGroqKeys.value = (data.groq_keys || []).join(',');
+      dom.txtSystemPrompt.value = data.system_prompt || '';
+      updateKeyStatus(dom.nvidiaKeyStatus, data.nvidia_keys);
+      updateKeyStatus(dom.groqKeyStatus, data.groq_keys);
+    } catch {}
+    show(dom.settingsModal);
+    closeMobileMenu();
+  }
+
+  function closeSettings() {
+    hide(dom.settingsModal);
+  }
+
+  async function saveSettings(e) {
+    e.preventDefault();
+    dom.settingsFeedback.textContent = '';
+    dom.settingsFeedback.className = 'settings-feedback';
+    const payload = {
+      ai_provider: dom.selAiProvider.value,
+      owner_number: dom.inputOwnerNumber.value.trim(),
+      nvidia_keys: dom.inputNvidiaKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean),
+      groq_keys: dom.inputGroqKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean),
+      system_prompt: dom.txtSystemPrompt.value,
+    };
+    try {
+      await fetchJSON('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
+      dom.settingsFeedback.textContent = 'Settings saved';
+      dom.settingsFeedback.className = 'settings-feedback success';
+    } catch {
+      dom.settingsFeedback.textContent = 'Failed to save settings';
+      dom.settingsFeedback.className = 'settings-feedback error';
+    }
+  }
+
+  function updateKeyStatus(el, keys) {
+    if (!keys || !keys.length) {
+      el.textContent = 'No keys configured';
+      el.className = 'key-status neutral';
+    } else {
+      el.textContent = keys.length + ' key' + (keys.length > 1 ? 's' : '') + ' configured';
+      el.className = 'key-status valid';
+    }
+  }
+
+  /* ----- Mobile Menu ----- */
+  function openMobileMenu() {
+    dom.mobileMenu.classList.add('open');
+    dom.mobileMenu.setAttribute('aria-hidden', 'false');
+    dom.hamburgerBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeMobileMenu() {
+    dom.mobileMenu.classList.remove('open');
+    dom.mobileMenu.setAttribute('aria-hidden', 'true');
+    dom.hamburgerBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  /* ----- Event Bindings ----- */
+  dom.loginForm.addEventListener('submit', doLogin);
+  dom.signOutBtn.addEventListener('click', doSignOut);
+  dom.mobileSignOutBtn.addEventListener('click', doSignOut);
+
+  dom.hamburgerBtn.addEventListener('click', openMobileMenu);
+  dom.drawerClose.addEventListener('click', closeMobileMenu);
+  dom.mobileMenu.addEventListener('click', function (e) {
+    if (e.target === dom.mobileMenu) closeMobileMenu();
+  });
+
+  dom.settingsBtn.addEventListener('click', openSettings);
+  dom.mobileSettingsBtn.addEventListener('click', openSettings);
+  dom.btnCancelSettings.addEventListener('click', closeSettings);
+  dom.settingsForm.addEventListener('submit', saveSettings);
+
+  dom.btnStart.addEventListener('click', function () { controlAction('start'); });
+  dom.btnStop.addEventListener('click', function () { controlAction('stop'); });
+  dom.btnNewSession.addEventListener('click', function () { controlAction('reset_session'); });
+
+  dom.btnStopSession.addEventListener('click', function () { controlAction('stop'); });
+  dom.btnResetPair.addEventListener('click', function () { controlAction('reset_session'); });
+
+  dom.btnClearLogs.addEventListener('click', function () {
+    dom.logStream.innerHTML = '';
+    lastLogOffset = 0;
+  });
+
+  /* Live key status while typing */
+  dom.inputNvidiaKeys.addEventListener('input', function () {
+    const keys = dom.inputNvidiaKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean);
+    updateKeyStatus(dom.nvidiaKeyStatus, keys);
+  });
+  dom.inputGroqKeys.addEventListener('input', function () {
+    const keys = dom.inputGroqKeys.value.split(',').map(function (k) { return k.trim(); }).filter(Boolean);
+    updateKeyStatus(dom.groqKeyStatus, keys);
+  });
+
+  /* Keyboard: Escape to close overlays */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (!dom.settingsModal.classList.contains('hidden')) closeSettings();
+      if (dom.mobileMenu.classList.contains('open')) closeMobileMenu();
+    }
+  });
+
+  /* ----- Demo Mode (no backend) ----- */
+  /* When there is no API backend, render a self-contained demo so the UI is fully visible */
+  let demoMode = false;
+
+  function enableDemoMode() {
+    demoMode = true;
+    hide(dom.loginModal);
+    isAuthenticated = true;
+    userRole = 'admin';
+    applyRole();
+
+    /* Show pairing briefly, then auto-transition to dashboard */
+    showPairingDemo();
+    setTimeout(function () {
+      appendLogLine('Session start requested');
+      setTimeout(showDashboardDemo, 600);
+    }, 1800);
+  }
+
+  function showPairingDemo() {
+    dom.statusDot.className = 'status-dot';
+    dom.statusText.textContent = 'Disconnected';
+    show(dom.pairingView);
+    hide(dom.dashboardView);
+    show(dom.brandSubtitle);
+    hide(dom.envLabel);
+
+    /* Show a placeholder QR */
+    hide(dom.qrLoading);
+    show(dom.qrImage);
+    hide(dom.qrConnected);
+    /* Generate a simple SVG QR-like placeholder */
+    dom.qrImage.src = 'data:image/svg+xml,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">' +
+      '<rect width="200" height="200" fill="#1f2c33"/>' +
+      '<g fill="#e9edef" opacity="0.15">' +
+      Array.from({length: 400}, function(_, i) {
+        var x = (i % 20) * 10; var y = Math.floor(i / 20) * 10;
+        return Math.random() > 0.45 ? '<rect x="'+x+'" y="'+y+'" width="9" height="9" rx="1"/>' : '';
+      }).join('') +
+      '</g></svg>'
+    );
+    dom.qrStatusText.textContent = 'Scan with WhatsApp to pair';
+  }
+
+  function showDashboardDemo() {
+    dom.statusDot.className = 'status-dot connected';
+    dom.statusText.textContent = 'Connected';
+    hide(dom.pairingView);
+    show(dom.dashboardView);
+    hide(dom.brandSubtitle);
+    show(dom.envLabel);
+
+    dom.metricMode.textContent = 'Auto';
+    dom.metricAutoReply.textContent = 'On';
+    dom.metricAutoReply.className = 'metric-value green';
+    dom.metricKeyIndex.textContent = '0';
+    dom.metricTotalMsgs.textContent = '1,247';
+    dom.metricAiReplies.textContent = '893';
+
+    /* Start demo log stream */
+    if (!demoLogTimer) startDemoLog();
+  }
+
+  let demoLogTimer = null;
+  const demoMessages = [
+    'Incoming message from +1 (555) 0142',
+    'AI reply sent (NVIDIA NIM, model: meta/llama3-70b)',
+    'Incoming message from +44 7700 900123',
+    'Auto-reply triggered for owner command: status',
+    'AI reply sent (Groq, model: mixtral-8x7b)',
+    'Incoming group message from Family Group',
+    'Ignored: group message (auto-reply off for groups)',
+    'Incoming message from +1 (555) 0198',
+    'AI reply sent (NVIDIA NIM, model: meta/llama3-70b)',
+    'Session heartbeat OK',
+    'Incoming message from +91 98765 43210',
+    'AI reply sent (Auto → Groq fallback)',
+    'Rate limit warning: NVIDIA NIM key 0 approaching limit',
+    'Switched to NVIDIA NIM key 1',
+    'Incoming message from +1 (555) 0142',
+    'AI reply sent (NVIDIA NIM key 1)',
+  ];
+  let demoMsgIndex = 0;
+
+  function startDemoLog() {
+    demoLogTimer = setInterval(function () {
+      appendLogLine(demoMessages[demoMsgIndex % demoMessages.length]);
+      demoMsgIndex++;
+    }, 2200);
+  }
+
+  function stopDemoLog() {
+    if (demoLogTimer) { clearInterval(demoLogTimer); demoLogTimer = null; }
+  }
+
+  /* Demo control overrides */
+  dom.btnStart.addEventListener('click', function () {
+    if (demoMode) {
+      appendLogLine('Starting session...');
+      setTimeout(showDashboardDemo, 1200);
+    }
+  }, true);
+
+  dom.btnStop.addEventListener('click', function () {
+    if (demoMode) {
+      stopDemoLog();
+      showPairingDemo();
+      dom.qrStatusText.textContent = 'Session stopped';
+    }
+  }, true);
+
+  dom.btnNewSession.addEventListener('click', function () {
+    if (demoMode) {
+      stopDemoLog();
+      show(dom.qrLoading);
+      hide(dom.qrImage);
+      hide(dom.qrConnected);
+      dom.qrStatusText.textContent = 'Generating new QR code...';
+      setTimeout(showPairingDemo, 1500);
+    }
+  }, true);
+
+  dom.btnStopSession.addEventListener('click', function () {
+    if (demoMode) {
+      stopDemoLog();
+      appendLogLine('Session stopped by user');
+      setTimeout(showPairingDemo, 400);
+    }
+  }, true);
+
+  dom.btnResetPair.addEventListener('click', function () {
+    if (demoMode) {
+      stopDemoLog();
+      appendLogLine('Session reset — pairing new device');
+      setTimeout(showPairingDemo, 600);
+    }
+  }, true);
+
+  /* Demo login */
+  dom.loginForm.addEventListener('submit', function (e) {
+    if (demoMode) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      hide(dom.loginModal);
+      isAuthenticated = true;
+      userRole = 'admin';
+      applyRole();
+      showPairingDemo();
+    }
+  }, true);
+
+  /* Demo settings */
+  dom.settingsForm.addEventListener('submit', function (e) {
+    if (demoMode) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      dom.settingsFeedback.textContent = 'Settings saved';
+      dom.settingsFeedback.className = 'settings-feedback success';
+      setTimeout(closeSettings, 1200);
+    }
+  }, true);
+
+  /* ----- Init ----- */
+  async function init() {
+    try {
+      const r = await fetch(API + '/api/auth/me', { method: 'GET', credentials: 'same-origin' });
+      if (r.ok || r.status === 401) {
+        /* Backend exists — use real mode */
+        checkAuth();
+        return;
+      }
+    } catch {}
+    /* No backend detected — enable self-contained demo */
+    enableDemoMode();
+  }
+
+  init();
 })();

@@ -1,185 +1,212 @@
-/* ===================================================================
-   Admin Console — tenant user management
-     GET /api/me         (auth + role check)
-     GET /api/admin/users
-     POST /api/admin/users     { username, password, role, owner_number, provider }
-     DELETE /api/admin/users/:id  (POST /api/admin/users/delete fallback)
-     POST /api/logout
-   =================================================================== */
+/* ===== WA Bot — Admin Console Logic ===== */
 (function () {
-    "use strict";
+  'use strict';
 
-    const $ = (id) => document.getElementById(id);
-    const api = async (url, opts = {}) => {
-        const res = await fetch(url, {
-            headers: { "Content-Type": "application/json" },
-            credentials: "same-origin",
-            ...opts,
-        });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const ct = res.headers.get("content-type") || "";
-        return ct.includes("application/json") ? res.json() : res.text();
-    };
+  /* ----- DOM refs ----- */
+  const $ = (id) => document.getElementById(id);
 
-    /* ---------- Auth guard ---------- */
-    async function guard() {
-        try {
-            const me = await api("/api/me");
-            const u = me.user || me;
-            const isAdmin = u && (u.role === "admin" || u.is_admin === true);
-            if (!u || (!me.authenticated && !u.username)) {
-                window.location.href = "index.html";
-                return false;
-            }
-            if (!isAdmin) {
-                window.location.href = "index.html";
-                return false;
-            }
-            $("app").hidden = false;
-            return true;
-        } catch (e) {
-            window.location.href = "index.html";
-            return false;
-        }
-    }
+  const dom = {
+    adminMobileMenu:     $('adminMobileMenu'),
+    adminHamburgerBtn:   $('adminHamburgerBtn'),
+    adminDrawerClose:    $('adminDrawerClose'),
+    adminMobileSignOutBtn: $('adminMobileSignOutBtn'),
+    adminSignOutBtn:     $('adminSignOutBtn'),
 
-    /* ---------- Users ---------- */
-    async function loadUsers() {
-        const body = $("userTableBody");
-        try {
-            const data = await api("/api/admin/users");
-            const users = Array.isArray(data) ? data : (data.users || []);
-            renderUsers(users);
-        } catch (e) {
-            body.innerHTML = '<tr><td colspan="5" style="color:var(--danger);">Failed to load users.</td></tr>';
-        }
-    }
+    tenantListBody:      $('tenantListBody'),
+    createUserForm:      $('createUserForm'),
+    newUsername:         $('newUsername'),
+    newPassword:         $('newPassword'),
+    newRole:             $('newRole'),
+    newOwnerNumber:      $('newOwnerNumber'),
+    newDefaultProvider:  $('newDefaultProvider'),
+    btnCreateUser:       $('btnCreateUser'),
+    btnCancelCreate:     $('btnCancelCreate'),
+    createUserError:     $('createUserError'),
+  };
 
-    function renderUsers(users) {
-        const body = $("userTableBody");
-        $("userCount").textContent = users.length + (users.length === 1 ? " user" : " users");
-        if (!users.length) {
-            body.innerHTML = '<tr><td colspan="5" style="color:var(--text-muted);">No tenant users yet.</td></tr>';
-            return;
-        }
-        body.innerHTML = "";
-        users.forEach((u) => {
-            const tr = document.createElement("tr");
+  /* ----- State ----- */
+  let demoMode = false;
 
-            const tdName = document.createElement("td");
-            tdName.textContent = u.username || "—";
-            tdName.style.color = "var(--text)";
+  /* ----- API base ----- */
+  const API = '';
 
-            const tdRole = document.createElement("td");
-            const badge = document.createElement("span");
-            const role = u.role || (u.is_admin ? "admin" : "user");
-            badge.className = "role-badge" + (role === "admin" ? " admin" : "");
-            badge.textContent = role;
-            tdRole.appendChild(badge);
-
-            const tdNum = document.createElement("td");
-            tdNum.textContent = u.owner_number || u.ownerNumber || "—";
-            tdNum.style.color = "var(--text-2)";
-
-            const tdProv = document.createElement("td");
-            tdProv.textContent = u.provider || "auto";
-            tdProv.style.color = "var(--text-2)";
-
-            const tdAct = document.createElement("td");
-            tdAct.style.textAlign = "right";
-            const del = document.createElement("button");
-            del.className = "btn-sm btn-danger";
-            del.textContent = "Remove";
-            del.addEventListener("click", () => removeUser(u));
-            tdAct.appendChild(del);
-
-            tr.append(tdName, tdRole, tdNum, tdProv, tdAct);
-            body.appendChild(tr);
-        });
-    }
-
-    async function removeUser(u) {
-        const id = u.id ?? u.username;
-        try {
-            try {
-                await api("/api/admin/users/" + encodeURIComponent(id), { method: "DELETE" });
-            } catch (e) {
-                await api("/api/admin/users/delete", {
-                    method: "POST",
-                    body: JSON.stringify({ id, username: u.username }),
-                });
-            }
-            showFeedback($("adminOk"), "User removed.");
-            loadUsers();
-        } catch (e) {
-            showFeedback($("adminErr"), "Could not remove user.");
-        }
-    }
-
-    async function createUser(e) {
-        e.preventDefault();
-        hideFeedback($("adminOk"));
-        hideFeedback($("adminErr"));
-        const btn = $("btnCreateUser");
-        const username = $("newUsername").value.trim();
-        const password = $("newPassword").value;
-        if (!username || !password) {
-            showFeedback($("adminErr"), "Username and password are required.");
-            return;
-        }
-        btn.disabled = true;
-        try {
-            await api("/api/admin/users", {
-                method: "POST",
-                body: JSON.stringify({
-                    username,
-                    password,
-                    role: $("newRole").value,
-                    owner_number: $("newOwnerNumber").value.trim(),
-                    provider: $("newProvider").value,
-                }),
-            });
-            showFeedback($("adminOk"), "User created.");
-            resetForm();
-            loadUsers();
-        } catch (err) {
-            showFeedback($("adminErr"), "Could not create user. The username may already exist.");
-        } finally {
-            btn.disabled = false;
-        }
-    }
-
-    function resetForm() {
-        $("createUserForm").reset();
-    }
-
-    async function doLogout() {
-        try { await api("/api/logout", { method: "POST" }); } catch (e) { }
-        window.location.href = "index.html";
-    }
-
-    /* ---------- Feedback ---------- */
-    function showFeedback(el, msg) { if (el) { el.textContent = msg; el.classList.add("show"); } }
-    function hideFeedback(el) { if (el) { el.textContent = ""; el.classList.remove("show"); } }
-
-    /* ---------- Mobile nav ---------- */
-    function toggleMobileNav() {
-        const nav = $("mobileNav");
-        const open = nav.classList.toggle("open");
-        $("hamburger").setAttribute("aria-expanded", String(open));
-    }
-
-    function bind() {
-        $("createUserForm").addEventListener("submit", createUser);
-        $("btnCancelCreate").addEventListener("click", resetForm);
-        $("btnSignOut").addEventListener("click", doLogout);
-        $("btnSignOutM").addEventListener("click", doLogout);
-        $("hamburger").addEventListener("click", toggleMobileNav);
-    }
-
-    document.addEventListener("DOMContentLoaded", async () => {
-        bind();
-        const ok = await guard();
-        if (ok) loadUsers();
+  /* ----- Helpers ----- */
+  function fetchJSON(url, options) {
+    return fetch(API + url, {
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      credentials: 'same-origin',
+      ...options,
+    }).then(function (r) {
+      if (r.status === 401) { window.location.href = 'index.html'; throw new Error('Unauthorized'); }
+      if (!r.ok) throw new Error('Request failed: ' + r.status);
+      return r.json();
     });
+  }
+
+  /* ----- Auth ----- */
+  async function checkAuth() {
+    try {
+      const data = await fetchJSON('/api/auth/me');
+      if (data.role !== 'admin') { window.location.href = 'index.html'; }
+    } catch {
+      window.location.href = 'index.html';
+    }
+  }
+
+  async function doSignOut() {
+    try { await fetchJSON('/api/auth/logout', { method: 'POST' }); } catch {}
+    window.location.href = 'index.html';
+  }
+
+  /* ----- Mobile Menu ----- */
+  function openMobileMenu() {
+    dom.adminMobileMenu.classList.add('open');
+    dom.adminMobileMenu.setAttribute('aria-hidden', 'false');
+    dom.adminHamburgerBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeMobileMenu() {
+    dom.adminMobileMenu.classList.remove('open');
+    dom.adminMobileMenu.setAttribute('aria-hidden', 'true');
+    dom.adminHamburgerBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  /* ----- Tenant User List ----- */
+  async function loadUsers() {
+    try {
+      const data = await fetchJSON('/api/admin/users');
+      renderUsers(data.users || []);
+    } catch {
+      if (!demoMode) renderUsers([]);
+    }
+  }
+
+  function renderUsers(users) {
+    dom.tenantListBody.innerHTML = '';
+    if (!users.length) {
+      var tr = document.createElement('tr');
+      var td = document.createElement('td');
+      td.colSpan = 5;
+      td.style.color = 'var(--text-3)';
+      td.style.textAlign = 'center';
+      td.style.padding = '20px 10px';
+      td.textContent = 'No tenant users found';
+      tr.appendChild(td);
+      dom.tenantListBody.appendChild(tr);
+      return;
+    }
+    users.forEach(function (u) {
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td>' + esc(u.username) + '</td>' +
+        '<td>' + esc(u.role) + '</td>' +
+        '<td>' + esc(u.owner_number || '—') + '</td>' +
+        '<td>' + esc(u.default_provider || '—') + '</td>' +
+        '<td><span class="badge' + (u.active ? ' green' : ' danger') + '">' + (u.active ? 'Active' : 'Inactive') + '</span></td>';
+      dom.tenantListBody.appendChild(tr);
+    });
+  }
+
+  function esc(s) {
+    var d = document.createElement('span');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  /* ----- Create User ----- */
+  async function createUser(e) {
+    e.preventDefault();
+    dom.createUserError.textContent = '';
+    var payload = {
+      username: dom.newUsername.value.trim(),
+      password: dom.newPassword.value,
+      role: dom.newRole.value,
+      owner_number: dom.newOwnerNumber.value.trim(),
+      default_provider: dom.newDefaultProvider.value,
+    };
+    if (!payload.username || !payload.password) {
+      dom.createUserError.textContent = 'Username and password are required';
+      return;
+    }
+    try {
+      await fetchJSON('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) });
+      dom.createUserForm.reset();
+      loadUsers();
+    } catch {
+      dom.createUserError.textContent = 'Failed to create user';
+    }
+  }
+
+  function cancelCreate() {
+    dom.createUserForm.reset();
+    dom.createUserError.textContent = '';
+  }
+
+  /* ----- Event Bindings ----- */
+  dom.adminSignOutBtn.addEventListener('click', doSignOut);
+  dom.adminMobileSignOutBtn.addEventListener('click', doSignOut);
+  dom.adminHamburgerBtn.addEventListener('click', openMobileMenu);
+  dom.adminDrawerClose.addEventListener('click', closeMobileMenu);
+  dom.adminMobileMenu.addEventListener('click', function (e) {
+    if (e.target === dom.adminMobileMenu) closeMobileMenu();
+  });
+
+  dom.createUserForm.addEventListener('submit', createUser);
+  dom.btnCancelCreate.addEventListener('click', cancelCreate);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && dom.adminMobileMenu.classList.contains('open')) closeMobileMenu();
+  });
+
+  /* ----- Demo Mode ----- */
+  var demoUsers = [
+    { username: 'admin', role: 'admin', owner_number: '+1 555-0100', default_provider: 'auto', active: true },
+    { username: 'operator1', role: 'user', owner_number: '+1 555-0142', default_provider: 'nvidia_nim', active: true },
+    { username: 'operator2', role: 'user', owner_number: '+44 7700 900123', default_provider: 'groq', active: true },
+    { username: 'operator3', role: 'user', owner_number: '+91 98765 43210', default_provider: 'auto', active: false },
+  ];
+
+  function enableDemoMode() {
+    demoMode = true;
+    renderUsers(demoUsers);
+  }
+
+  /* Demo create user override */
+  dom.createUserForm.addEventListener('submit', function (e) {
+    if (demoMode) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      dom.createUserError.textContent = '';
+      var uname = dom.newUsername.value.trim();
+      var pwd = dom.newPassword.value;
+      if (!uname || !pwd) { dom.createUserError.textContent = 'Username and password are required'; return; }
+      demoUsers.push({
+        username: uname,
+        role: dom.newRole.value,
+        owner_number: dom.newOwnerNumber.value.trim() || '—',
+        default_provider: dom.newDefaultProvider.value,
+        active: true,
+      });
+      renderUsers(demoUsers);
+      dom.createUserForm.reset();
+    }
+  }, true);
+
+  /* ----- Init ----- */
+  function init() {
+    fetch(API + '/api/auth/me', { credentials: 'same-origin' }).then(function (r) {
+      if (r.ok) {
+        r.json().then(function (data) {
+          if (data.role !== 'admin') window.location.href = 'index.html';
+        });
+        loadUsers();
+      } else {
+        enableDemoMode();
+      }
+    }).catch(function () {
+      enableDemoMode();
+    });
+  }
+
+  init();
 })();

@@ -187,8 +187,8 @@ class JsonDatabase {
       try {
         fs.renameSync(tempPath, this.filePath);
       } catch (renameErr) {
-        fs.copyFileSync(tempPath, this.filePath);
-        try { fs.unlinkSync(tempPath); } catch (uErr) {}
+        fs.writeFileSync(this.filePath, JSON.stringify(this.data, null, 2), 'utf8');
+        try { fs.unlinkSync(tempPath); } catch (_) {}
       }
     } catch (err) {
       logger.error('Error saving database:', err.message);

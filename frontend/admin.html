@@ -1,112 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Admin console for multi-tenant WhatsApp AI assistant user management." />
-  <title>Admin Console — WhatsApp AI</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WA Bot — Admin Console">
+  <title>WA Bot — Admin</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
 
-  <div class="app" id="app" hidden>
-    <header class="topbar">
-      <div class="topbar-inner">
-        <div class="brand">
-          <span class="brand-name">Admin Console</span>
-          <span class="brand-sub">WhatsApp AI · Tenant Management</span>
-        </div>
-        <span class="topbar-spacer"></span>
-        <span class="env-label">Production</span>
-        <nav class="nav-desktop" aria-label="Primary">
-          <a href="index.html" class="nav-link">Dashboard</a>
-          <button type="button" class="btn-ghost" id="btnSignOut">Sign Out</button>
-        </nav>
-        <button type="button" class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false" aria-controls="mobileNav">
-          <span></span><span></span><span></span>
-        </button>
-      </div>
-      <nav class="mobile-nav" id="mobileNav" aria-label="Mobile">
-        <div class="mobile-nav-inner">
-          <a href="index.html">Dashboard</a>
-          <button type="button" id="btnSignOutM">Sign Out</button>
-        </div>
-      </nav>
-    </header>
-
-    <main class="main" id="main">
-      <div class="admin-grid">
-        <!-- Create form -->
-        <div class="panel">
-          <div class="panel-head">
-            <span class="panel-title">Create Tenant User</span>
-          </div>
-          <div class="panel-body">
-            <div class="feedback ok" id="adminOk" role="status"></div>
-            <div class="feedback err" id="adminErr" role="alert"></div>
-            <form id="createUserForm" novalidate>
-              <div class="field">
-                <label for="newUsername">Username</label>
-                <input type="text" id="newUsername" name="username" autocomplete="off" required />
-              </div>
-              <div class="field">
-                <label for="newPassword">Password</label>
-                <input type="password" id="newPassword" name="password" autocomplete="new-password" required />
-              </div>
-              <div class="field">
-                <label for="newRole">Role</label>
-                <select id="newRole" name="role">
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="newOwnerNumber">Owner WhatsApp Number</label>
-                <input type="text" id="newOwnerNumber" name="ownerNumber" placeholder="e.g. 15551234567" inputmode="numeric" />
-              </div>
-              <div class="field">
-                <label for="newProvider">Default AI Provider</label>
-                <select id="newProvider" name="provider">
-                  <option value="auto">Auto</option>
-                  <option value="nvidia">NVIDIA NIM</option>
-                  <option value="groq">Groq</option>
-                </select>
-              </div>
-              <div class="control-row" style="margin-top:4px;">
-                <button type="submit" class="btn-primary" id="btnCreateUser">Create User</button>
-                <button type="button" id="btnCancelCreate">Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <!-- User list -->
-        <div class="panel">
-          <div class="panel-head">
-            <span class="panel-title">Tenant Users</span>
-            <span class="panel-title-sub" id="userCount" style="margin-left:auto;">0 users</span>
-          </div>
-          <div class="table-wrap">
-            <table class="data" id="userTable">
-              <thead>
-                <tr>
-                  <th scope="col">Username</th>
-                  <th scope="col">Role</th>
-                  <th scope="col">Owner Number</th>
-                  <th scope="col">Provider</th>
-                  <th scope="col" style="text-align:right;">Action</th>
-                </tr>
-              </thead>
-              <tbody id="userTableBody">
-                <tr><td colspan="5" style="color:var(--text-muted);">Loading users…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </main>
+  <!-- ===== MOBILE DRAWER ===== -->
+  <div id="adminMobileMenu" class="mobile-overlay" aria-hidden="true">
+    <div class="mobile-drawer" role="navigation" aria-label="Admin mobile navigation">
+      <button type="button" class="btn btn-sm drawer-close" id="adminDrawerClose" aria-label="Close menu">Close</button>
+      <a href="index.html" class="btn">Dashboard</a>
+      <div class="divider"></div>
+      <div class="drawer-spacer"></div>
+      <button type="button" class="btn" id="adminMobileSignOutBtn" style="color:var(--danger);border-color:var(--danger)">Sign out</button>
+    </div>
   </div>
+
+  <!-- ===== TOP BAR ===== -->
+  <header class="topbar" role="banner">
+    <div class="topbar-brand">
+      <h1>WA Bot</h1>
+      <span class="subtitle">Admin Console</span>
+    </div>
+    <div class="topbar-right">
+      <nav class="nav-desktop" aria-label="Admin navigation">
+        <a href="index.html" class="btn btn-sm">Dashboard</a>
+        <button type="button" class="btn btn-sm" id="adminSignOutBtn" style="color:var(--danger)">Sign out</button>
+      </nav>
+      <button type="button" class="hamburger btn btn-sm" id="adminHamburgerBtn" aria-label="Open menu" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="1.5"/><rect y="7" width="16" height="1.5"/><rect y="12" width="16" height="1.5"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content" id="adminMainContent">
+
+    <!-- Tenant User List -->
+    <section class="card admin-card" aria-label="Tenant users">
+      <div class="card-title">Tenant Users</div>
+      <div class="tenant-table-wrap">
+        <table class="tenant-table" id="tenantTable">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Owner Number</th>
+              <th>AI Provider</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="tenantListBody">
+            <!-- Rows injected by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Create New Tenant User -->
+    <section class="card" aria-label="Create tenant user">
+      <div class="card-title">Create New Tenant User</div>
+      <form id="createUserForm">
+        <div class="create-form-grid">
+          <div class="field-group">
+            <label class="input-label" for="newUsername">Username</label>
+            <input class="input" id="newUsername" type="text" name="username" required autocomplete="off">
+          </div>
+          <div class="field-group">
+            <label class="input-label" for="newPassword">Password</label>
+            <input class="input" id="newPassword" type="password" name="password" required autocomplete="new-password">
+          </div>
+          <div class="field-group">
+            <label class="input-label" for="newRole">Role</label>
+            <select class="select" id="newRole" name="role">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="input-label" for="newOwnerNumber">Owner WhatsApp Number</label>
+            <input class="input" id="newOwnerNumber" type="text" name="owner_number" placeholder="+1234567890">
+          </div>
+          <div class="field-group" style="grid-column: 1 / -1">
+            <label class="input-label" for="newDefaultProvider">Default AI Provider</label>
+            <select class="select" id="newDefaultProvider" name="default_provider">
+              <option value="nvidia_nim">NVIDIA NIM</option>
+              <option value="groq">Groq</option>
+              <option value="auto">Auto</option>
+            </select>
+          </div>
+        </div>
+        <div id="createUserError" class="login-error" role="alert" aria-live="polite"></div>
+        <div class="create-form-actions">
+          <button type="submit" class="btn btn-primary" id="btnCreateUser">Create</button>
+          <button type="button" class="btn" id="btnCancelCreate">Cancel</button>
+        </div>
+      </form>
+    </section>
+
+  </main>
 
   <script src="admin.js"></script>
 </body>

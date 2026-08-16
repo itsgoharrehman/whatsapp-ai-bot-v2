@@ -147,7 +147,8 @@ export function createServer() {
   });
 
   // =========================================================================
-  // Public Authentication Endpoints (Control Plane & Frontend 2.0)
+  // Public Authentication Endpoints (Control Plane)
+  // Supports /api/auth/login, /api/login, /api/auth/logout, /api/logout, /api/auth/me, /api/me
   // =========================================================================
 
   const handleLogin = (req, res) => {
@@ -163,11 +164,11 @@ export function createServer() {
     res.setHeader('Set-Cookie', `session_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`);
     res.json({
       success: true,
-      authenticated: true,
       token,
       user,
-      username: user.username,
+      authenticated: true,
       role: user.role,
+      username: user.username,
       is_admin: user.role === 'admin'
     });
   };
@@ -190,8 +191,8 @@ export function createServer() {
     res.json({
       authenticated: true,
       user: req.user,
-      username: req.user.username,
       role: req.user.role,
+      username: req.user.username,
       is_admin: req.user.role === 'admin'
     });
   };
@@ -204,31 +205,69 @@ export function createServer() {
   // =========================================================================
 
   app.get('/api/status', requireAuth, async (req, res) => {
+    let st = null;
     if (config.alwaysdataBaseUrl) {
       try {
         const response = await forwardToAlwaysdata('GET', `/internal/status/${req.user.id}`);
         if (response && response.ok) {
-          const data = await response.json();
-          return res.json(data);
+          st = await response.json();
         }
       } catch (err) {
         logger.error('Failed to proxy status to Alwaysdata:', err.message);
       }
     }
-    res.json(sessionManager.getStatus(req.user.id));
+    if (!st) {
+      st = sessionManager.getStatus(req.user.id);
+    }
+
+    const isConnected = st.status === 'CONNECTED';
+    res.json({
+      ...st,
+      connected: isConnected,
+      connection: st.status.toLowerCase(),
+      status: st.status,
+      qr: st.qrCodeDataUrl,
+      qr_code: st.qrCodeDataUrl,
+      mode: 'Auto',
+      operating_mode: 'Auto',
+      auto_reply: st.autoReply,
+      autoReply: st.autoReply,
+      active_key_index: st.keyIndices ? (st.keyIndices.nvidia || st.keyIndices.groq || 0) : 0,
+      key_index: st.keyIndices ? (st.keyIndices.nvidia || st.keyIndices.groq || 0) : 0,
+      messages_processed: st.analytics ? st.analytics.totalProcessed : 0,
+      total_messages: st.analytics ? st.analytics.totalProcessed : 0,
+      ai_replies: st.analytics ? st.analytics.totalReplies : 0,
+      total_replies: st.analytics ? st.analytics.totalReplies : 0,
+      environment: 'Production',
+      env: 'Production'
+    });
   });
 
   app.get('/api/logs', requireAuth, async (req, res) => {
+    let history = [];
     if (config.alwaysdataBaseUrl) {
       try {
         const response = await forwardToAlwaysdata('GET', `/internal/logs/${req.user.id}`);
         if (response && response.ok) {
-          const data = await response.json();
-          return res.json(data);
+          history = await response.json();
         }
       } catch (err) {}
+    } else {
+      history = logger.getHistory(req.user.id);
     }
-    res.json(logger.getHistory(req.user.id));
+
+    const normalized = (history || []).map((h, idx) => ({
+      id: idx + 1,
+      msg: typeof h === 'string' ? h : (h.message || ''),
+      message: typeof h === 'string' ? h : (h.message || ''),
+      text: typeof h === 'string' ? h : (h.message || ''),
+      level: typeof h === 'object' && h.level ? h.level.toLowerCase() : 'info',
+      type: typeof h === 'object' && h.level ? h.level.toLowerCase() : 'info',
+      time: typeof h === 'object' && h.timestamp ? new Date(h.timestamp).toTimeString().slice(0, 8) : new Date().toTimeString().slice(0, 8),
+      timestamp: typeof h === 'object' && h.timestamp ? h.timestamp : new Date().toISOString()
+    }));
+
+    res.json(normalized);
   });
 
   app.get('/api/logs/stream', requireAuth, (req, res) => {
@@ -238,7 +277,8 @@ export function createServer() {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
-    res.write(`data: ${JSON.stringify({ type: 'history', logs: logger.getHistory(req.user.id) })}\n\n`);
+    const history = logger.getHistory(req.user.id);
+    res.write(`data: ${JSON.stringify({ type: 'history', logs: history })}\n\n`);
 
     const logHandler = (logEntry) => {
       if (logEntry.userId === req.user.id || logEntry.userId === null) {
@@ -250,71 +290,103 @@ export function createServer() {
     req.on('close', () => logger.off('log', logHandler));
   });
 
-  const handleControl = async (req, res) => {
-    const action = req.params.action || req.body?.action;
-    if (!action) return res.status(400).json({ error: 'Action parameter required' });
-
+  // Generic and specific control endpoints
+  const executeControl = async (userId, action) => {
     if (config.alwaysdataBaseUrl) {
       try {
-        const response = await forwardToAlwaysdata('POST', `/internal/control/${req.user.id}/${action}`);
-        if (response && response.ok) return res.json({ success: true, message: `Action ${action} requested` });
+        const response = await forwardToAlwaysdata('POST', `/internal/control/${userId}/${action}`);
+        if (response && response.ok) return true;
       } catch (err) {}
     }
-
     if (action === 'start') {
-      sessionManager.startSession(req.user.id);
+      sessionManager.startSession(userId);
     } else if (action === 'stop') {
-      await sessionManager.stopSession(req.user.id);
+      await sessionManager.stopSession(userId);
     } else if (action === 'reset' || action === 'reset_session') {
-      logger.forUser(req.user.id).warn('Dashboard: Initiated Session Reset & QR Re-generation');
-      await sessionManager.resetSession(req.user.id);
-      setTimeout(() => sessionManager.startSession(req.user.id, true), 1000);
+      logger.forUser(userId).warn('Dashboard: Initiated Session Reset & QR Re-generation');
+      await sessionManager.resetSession(userId);
+      setTimeout(() => sessionManager.startSession(userId, true), 1000);
     }
-    res.json({ success: true, message: `Action ${action} executed` });
+    return true;
   };
 
-  app.post('/api/control', requireAuth, handleControl);
-  app.post('/api/control/:action', requireAuth, handleControl);
+  app.post('/api/control', requireAuth, async (req, res) => {
+    const action = req.body && req.body.action ? req.body.action : 'start';
+    await executeControl(req.user.id, action);
+    res.json({ success: true, action });
+  });
+
+  app.post('/api/control/start', requireAuth, async (req, res) => {
+    await executeControl(req.user.id, 'start');
+    res.json({ success: true });
+  });
+
+  app.post('/api/start', requireAuth, async (req, res) => {
+    await executeControl(req.user.id, 'start');
+    res.json({ success: true });
+  });
+
+  app.post('/api/control/stop', requireAuth, async (req, res) => {
+    await executeControl(req.user.id, 'stop');
+    res.json({ success: true });
+  });
+
+  app.post('/api/stop', requireAuth, async (req, res) => {
+    await executeControl(req.user.id, 'stop');
+    res.json({ success: true });
+  });
+
+  app.post('/api/control/reset_session', requireAuth, async (req, res) => {
+    await executeControl(req.user.id, 'reset');
+    res.json({ success: true, message: 'Session reset. Generating new QR code...' });
+  });
+
+  app.post('/api/reset_session', requireAuth, async (req, res) => {
+    await executeControl(req.user.id, 'reset');
+    res.json({ success: true, message: 'Session reset. Generating new QR code...' });
+  });
 
   // User Settings & BYOK API Keys (Encrypted at rest)
   app.get('/api/settings', requireAuth, (req, res) => {
-    const settings = db.getUserSettings(req.user.id);
-    const keys = db.getMaskedUserApiKeys(req.user.id);
-    const rawKeys = db.getUserApiKeys(req.user.id);
+    const currentSettings = db.getUserSettings(req.user.id);
+    const currentKeys = db.getUserApiKeys(req.user.id);
+    const maskedKeys = db.getMaskedUserApiKeys(req.user.id);
+
     res.json({
-      provider: settings.provider || 'auto',
-      owner_number: settings.ownerNumber || '',
-      ownerNumber: settings.ownerNumber || '',
-      nvidia_keys: keys.nvidiaKeysMasked || [],
-      nvidiaKeys: keys.nvidiaKeysMasked || [],
-      groq_keys: keys.groqKeysMasked || [],
-      groqKeys: keys.groqKeysMasked || [],
-      system_prompt: settings.systemPrompt || '',
-      systemPrompt: settings.systemPrompt || '',
-      nvidia_valid: (rawKeys.nvidiaKeys || []).length > 0,
-      groq_valid: (rawKeys.groqKeys || []).length > 0,
-      settings,
-      keys
+      provider: currentSettings.provider || 'auto',
+      ai_provider: currentSettings.provider || 'auto',
+      owner_number: currentSettings.ownerNumber || '',
+      ownerNumber: currentSettings.ownerNumber || '',
+      nvidia_keys: maskedKeys.nvidiaKeysMasked || [],
+      groq_keys: maskedKeys.groqKeysMasked || [],
+      system_prompt: currentSettings.systemPrompt || '',
+      systemPrompt: currentSettings.systemPrompt || '',
+      nvidia_valid: (currentKeys.nvidiaKeys && currentKeys.nvidiaKeys.length > 0),
+      groq_valid: (currentKeys.groqKeys && currentKeys.groqKeys.length > 0),
+      settings: currentSettings,
+      keys: maskedKeys
     });
   });
 
   app.post('/api/settings', requireAuth, async (req, res) => {
     const body = req.body || {};
-    const settingsObj = body.settings || {};
+    const provider = body.provider || body.ai_provider || (body.settings && body.settings.provider);
+    const ownerNumber = body.owner_number || body.ownerNumber || (body.settings && body.settings.ownerNumber);
+    const systemPrompt = body.system_prompt !== undefined ? body.system_prompt : (body.systemPrompt !== undefined ? body.systemPrompt : (body.settings && body.settings.systemPrompt));
     
-    const provider = body.provider || settingsObj.provider;
-    const ownerNumber = body.owner_number || body.ownerNumber || settingsObj.ownerNumber;
-    const systemPrompt = body.system_prompt !== undefined ? body.system_prompt : (body.systemPrompt !== undefined ? body.systemPrompt : settingsObj.systemPrompt);
-    const groqKeys = body.groq_keys || body.groqKeys;
-    const nvidiaKeys = body.nvidia_keys || body.nvidiaKeys;
+    let groqKeys = body.groq_keys || body.groqKeys || (body.keys && body.keys.groqKeys);
+    let nvidiaKeys = body.nvidia_keys || body.nvidiaKeys || (body.keys && body.keys.nvidiaKeys);
 
-    const newSettings = {};
-    if (provider) newSettings.provider = provider;
-    if (ownerNumber !== undefined) newSettings.ownerNumber = ownerNumber;
-    if (systemPrompt !== undefined) newSettings.systemPrompt = systemPrompt;
+    if (typeof groqKeys === 'string') groqKeys = groqKeys.split(',').map(s => s.trim()).filter(Boolean);
+    if (typeof nvidiaKeys === 'string') nvidiaKeys = nvidiaKeys.split(',').map(s => s.trim()).filter(Boolean);
 
-    if (Object.keys(newSettings).length > 0) {
-      db.updateUserSettings(req.user.id, newSettings);
+    const settingUpdates = {};
+    if (provider) settingUpdates.provider = provider;
+    if (ownerNumber !== undefined) settingUpdates.ownerNumber = ownerNumber;
+    if (systemPrompt !== undefined) settingUpdates.systemPrompt = systemPrompt;
+
+    if (Object.keys(settingUpdates).length > 0) {
+      db.updateUserSettings(req.user.id, settingUpdates);
     }
     if (Array.isArray(groqKeys) || Array.isArray(nvidiaKeys)) {
       db.setUserApiKeys(req.user.id, { groqKeys, nvidiaKeys });
@@ -322,7 +394,6 @@ export function createServer() {
 
     const currentKeys = db.getUserApiKeys(req.user.id);
     const currentSettings = db.getUserSettings(req.user.id);
-    const masked = db.getMaskedUserApiKeys(req.user.id);
 
     // Sync to in-memory runtime on Alwaysdata
     if (config.alwaysdataBaseUrl) {
@@ -343,38 +414,38 @@ export function createServer() {
       });
     }
 
+    const maskedKeys = db.getMaskedUserApiKeys(req.user.id);
     res.json({
       success: true,
-      provider: currentSettings.provider,
-      owner_number: currentSettings.ownerNumber,
-      ownerNumber: currentSettings.ownerNumber,
-      system_prompt: currentSettings.systemPrompt,
-      systemPrompt: currentSettings.systemPrompt,
-      nvidia_keys: masked.nvidiaKeysMasked,
-      groq_keys: masked.groqKeysMasked,
-      nvidia_valid: (currentKeys.nvidiaKeys || []).length > 0,
-      groq_valid: (currentKeys.groqKeys || []).length > 0,
+      provider: currentSettings.provider || 'auto',
+      ai_provider: currentSettings.provider || 'auto',
+      owner_number: currentSettings.ownerNumber || '',
+      ownerNumber: currentSettings.ownerNumber || '',
+      nvidia_keys: maskedKeys.nvidiaKeysMasked || [],
+      groq_keys: maskedKeys.groqKeysMasked || [],
+      system_prompt: currentSettings.systemPrompt || '',
+      systemPrompt: currentSettings.systemPrompt || '',
+      nvidia_valid: (currentKeys.nvidiaKeys && currentKeys.nvidiaKeys.length > 0),
+      groq_valid: (currentKeys.groqKeys && currentKeys.groqKeys.length > 0),
       settings: currentSettings,
-      keys: masked
+      keys: maskedKeys
     });
   });
 
   // =========================================================================
-  // Admin Management Endpoints (Control Plane & Frontend 2.0)
+  // Admin Management Endpoints (Control Plane)
   // =========================================================================
 
   app.get('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
-    const list = sessionManager.getAllSessionsStatus().map(u => {
-      const settings = db.getUserSettings(u.id);
-      return {
-        ...u,
-        owner_number: settings.ownerNumber || '',
-        ownerNumber: settings.ownerNumber || '',
-        provider: settings.provider || 'auto',
-        is_admin: u.role === 'admin'
-      };
-    });
-    res.json({ users: list, count: list.length });
+    const rawUsers = sessionManager.getAllSessionsStatus();
+    const mappedUsers = rawUsers.map(u => ({
+      ...u,
+      owner_number: u.ownerNumber || '',
+      default_provider: u.provider || 'auto',
+      active: u.enabled !== false,
+      is_admin: u.role === 'admin'
+    }));
+    res.json({ users: mappedUsers });
   });
 
   app.post('/api/admin/users', requireAuth, requireAdmin, (req, res) => {
@@ -383,8 +454,8 @@ export function createServer() {
       const username = body.username;
       const password = body.password;
       const role = body.role || 'user';
-      const ownerNumber = body.owner_number || body.ownerNumber || body.settings?.ownerNumber;
-      const provider = body.provider || body.settings?.provider;
+      const ownerNumber = body.owner_number || body.ownerNumber || (body.settings && body.settings.ownerNumber) || '';
+      const provider = body.default_provider || body.provider || (body.settings && body.settings.provider) || 'nvidia';
       const groqKeys = body.groq_keys || body.groqKeys;
       const nvidiaKeys = body.nvidia_keys || body.nvidiaKeys;
 
@@ -397,7 +468,16 @@ export function createServer() {
         groqKeys,
         nvidiaKeys
       });
-      res.json({ success: true, user: newUser });
+      res.json({
+        success: true,
+        user: {
+          ...newUser,
+          owner_number: ownerNumber,
+          default_provider: provider,
+          active: true,
+          is_admin: role === 'admin'
+        }
+      });
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
@@ -408,18 +488,11 @@ export function createServer() {
       const targetUserId = req.params.id;
       const updates = req.body || {};
       const updated = db.updateUser(targetUserId, updates);
-      if (updates.settings || updates.owner_number || updates.ownerNumber || updates.provider) {
-        db.updateUserSettings(targetUserId, {
-          ...(updates.settings || {}),
-          ownerNumber: updates.owner_number || updates.ownerNumber || updates.settings?.ownerNumber,
-          provider: updates.provider || updates.settings?.provider
-        });
+      if (updates.settings) {
+        db.updateUserSettings(targetUserId, updates.settings);
       }
-      if (updates.groq_keys || updates.groqKeys || updates.nvidia_keys || updates.nvidiaKeys) {
-        db.setUserApiKeys(targetUserId, {
-          groqKeys: updates.groq_keys || updates.groqKeys,
-          nvidiaKeys: updates.nvidia_keys || updates.nvidiaKeys
-        });
+      if (updates.groqKeys || updates.nvidiaKeys) {
+        db.setUserApiKeys(targetUserId, { groqKeys: updates.groqKeys, nvidiaKeys: updates.nvidiaKeys });
       }
       res.json({ success: true, user: updated });
     } catch (err) {
@@ -429,25 +502,23 @@ export function createServer() {
 
   const handleDeleteUser = async (req, res) => {
     try {
-      const targetUserId = req.params.id || req.body?.id || req.body?.username;
-      if (!targetUserId) {
-        return res.status(400).json({ error: 'User identifier required' });
+      const targetUserId = req.params.id || (req.body && (req.body.id || req.body.username));
+      let resolvedId = targetUserId;
+      if (!db.data.users[resolvedId]) {
+        const found = Object.values(db.data.users).find(u => u.username === targetUserId || u.id === targetUserId);
+        if (found) resolvedId = found.id;
       }
-      const user = db.data.users[targetUserId] || db.getUserByUsername(targetUserId);
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
-      if (user.id === req.user.id) {
+      if (resolvedId === req.user.id) {
         return res.status(400).json({ error: 'Cannot delete your own admin account' });
       }
       if (config.alwaysdataBaseUrl) {
         try {
-          await forwardToAlwaysdata('DELETE', `/internal/users/${user.id}`);
+          await forwardToAlwaysdata('DELETE', `/internal/users/${resolvedId}`);
         } catch (err) {}
       }
-      await sessionManager.stopSession(user.id);
-      await sessionManager.resetSession(user.id);
-      const deleted = db.deleteUser(user.id);
+      await sessionManager.stopSession(resolvedId);
+      await sessionManager.resetSession(resolvedId);
+      const deleted = db.deleteUser(resolvedId);
       res.json({ success: deleted });
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -474,7 +545,7 @@ export function createServer() {
         sessionManager.startSession(targetUserId);
       } else if (action === 'stop') {
         await sessionManager.stopSession(targetUserId);
-      } else if (action === 'reset' || action === 'reset_session') {
+      } else if (action === 'reset') {
         await sessionManager.resetSession(targetUserId);
         setTimeout(() => sessionManager.startSession(targetUserId, true), 1000);
       }
@@ -484,6 +555,7 @@ export function createServer() {
     }
   });
 
+  app.get('*', (req, res) => res.sendFile(path.join(ROOT_DIR, 'frontend', 'index.html')));
   return app;
 }
 

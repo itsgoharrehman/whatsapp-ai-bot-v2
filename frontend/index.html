@@ -1,229 +1,209 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Control interface for a multi-tenant WhatsApp AI personal assistant. Pair a device, monitor live activity, and manage automation." />
-  <title>Assistant Console — WhatsApp AI</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="WhatsApp AI Bot — Dashboard and Analytics">
+  <title>WA Bot — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to main content</a>
 
-  <!-- ============ LOGIN GATE ============ -->
-  <div class="login-gate" id="loginGate" hidden>
-    <div class="login-card" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
-      <div class="login-head">
-        <div class="brand-name" id="loginTitle">Assistant Console</div>
-        <div class="brand-sub">WhatsApp AI · Sign in</div>
-      </div>
-      <div class="login-body">
-        <div class="feedback err" id="loginError" role="alert"></div>
-        <form id="loginForm" novalidate>
-          <div class="field">
-            <label for="loginUsername">Username</label>
-            <input type="text" id="loginUsername" name="username" autocomplete="username" required />
-          </div>
-          <div class="field">
-            <label for="loginPassword">Password</label>
-            <input type="password" id="loginPassword" name="password" autocomplete="current-password" required />
-          </div>
-          <button type="submit" class="btn-primary" id="loginBtn" style="width:100%;height:34px;">Sign In</button>
-        </form>
-      </div>
+  <!-- ===== LOGIN MODAL ===== -->
+  <div id="loginModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-label="Sign in">
+    <div class="modal-panel">
+      <h2>Sign in</h2>
+      <form id="loginForm" autocomplete="on">
+        <div class="field-group">
+          <label class="input-label" for="loginUsername">Username</label>
+          <input class="input" id="loginUsername" type="text" name="username" autocomplete="username" required>
+        </div>
+        <div class="field-group">
+          <label class="input-label" for="loginPassword">Password</label>
+          <input class="input" id="loginPassword" type="password" name="password" autocomplete="current-password" required>
+        </div>
+        <div id="loginError" class="login-error" role="alert" aria-live="polite"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="loginBtn">Sign in</button>
+      </form>
     </div>
   </div>
 
-  <!-- ============ APP ============ -->
-  <div class="app" id="app" hidden>
-    <header class="topbar">
-      <div class="topbar-inner">
-        <div class="brand">
-          <span class="brand-name">Assistant Console</span>
-          <span class="brand-sub">WhatsApp AI Assistant</span>
+  <!-- ===== SETTINGS MODAL ===== -->
+  <div id="settingsModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="settings-panel">
+      <h2>Settings</h2>
+      <form id="settingsForm">
+        <div class="field-group">
+          <label class="input-label" for="selAiProvider">AI Provider</label>
+          <select class="select" id="selAiProvider" name="ai_provider">
+            <option value="nvidia_nim">NVIDIA NIM</option>
+            <option value="groq">Groq</option>
+            <option value="auto">Auto</option>
+          </select>
         </div>
-        <span class="topbar-status" id="connStatus" aria-live="polite">
-          <span class="status-dot is-disconnected" id="connDot"></span>
-          <span id="connLabel">Disconnected</span>
-        </span>
-        <span class="topbar-spacer"></span>
-        <span class="env-label" id="envLabel">Production</span>
-        <nav class="nav-desktop" aria-label="Primary">
-          <button type="button" class="nav-link" id="btnSettings">Settings</button>
-          <a href="admin.html" class="nav-link" id="adminLink" hidden>Admin</a>
-          <button type="button" class="btn-ghost" id="btnSignOut">Sign Out</button>
-        </nav>
-        <button type="button" class="hamburger" id="hamburger" aria-label="Menu" aria-expanded="false" aria-controls="mobileNav">
-          <span></span><span></span><span></span>
-        </button>
-      </div>
-      <nav class="mobile-nav" id="mobileNav" aria-label="Mobile">
-        <div class="mobile-nav-inner">
-          <button type="button" id="btnSettingsM">Settings</button>
-          <a href="admin.html" id="adminLinkM" hidden>Admin</a>
-          <button type="button" id="btnSignOutM">Sign Out</button>
+        <div class="field-group">
+          <label class="input-label" for="inputOwnerNumber">Authorized Owner Number</label>
+          <input class="input" id="inputOwnerNumber" type="text" name="owner_number" placeholder="+1234567890">
         </div>
+        <div class="field-group">
+          <label class="input-label" for="inputNvidiaKeys">NVIDIA API Keys (comma-separated)</label>
+          <input class="input" id="inputNvidiaKeys" type="text" name="nvidia_keys" placeholder="nvapi-...,nvapi-...">
+          <div id="nvidiaKeyStatus" class="key-status neutral"></div>
+        </div>
+        <div class="field-group">
+          <label class="input-label" for="inputGroqKeys">Groq API Keys (comma-separated)</label>
+          <input class="input" id="inputGroqKeys" type="text" name="groq_keys" placeholder="gsk_...,gsk_...">
+          <div id="groqKeyStatus" class="key-status neutral"></div>
+        </div>
+        <div class="field-group">
+          <label class="input-label" for="txtSystemPrompt">Custom System Prompt</label>
+          <textarea class="textarea" id="txtSystemPrompt" name="system_prompt" rows="4" placeholder="You are a helpful WhatsApp assistant..."></textarea>
+        </div>
+        <div class="settings-actions">
+          <button type="submit" class="btn btn-primary" id="btnSaveSettings">Save</button>
+          <button type="button" class="btn" id="btnCancelSettings">Cancel</button>
+        </div>
+        <div id="settingsFeedback" class="settings-feedback" role="status" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== MOBILE DRAWER ===== -->
+  <div id="mobileMenu" class="mobile-overlay" aria-hidden="true">
+    <div class="mobile-drawer" role="navigation" aria-label="Mobile navigation">
+      <button type="button" class="btn btn-sm drawer-close" id="drawerClose" aria-label="Close menu">Close</button>
+      <button type="button" class="btn" id="mobileSettingsBtn">Settings</button>
+      <button type="button" class="btn hidden" id="mobileAdminBtn">Admin</button>
+      <div class="divider"></div>
+      <div class="drawer-spacer"></div>
+      <button type="button" class="btn danger-link" id="mobileSignOutBtn" style="color:var(--danger);border-color:var(--danger)">Sign out</button>
+    </div>
+  </div>
+
+  <!-- ===== TOP BAR ===== -->
+  <header class="topbar" role="banner">
+    <div class="topbar-brand">
+      <h1>WA Bot</h1>
+      <span class="subtitle" id="brandSubtitle">AI Personal Assistant</span>
+      <span class="env-label hidden" id="envLabel">PRODUCTION</span>
+    </div>
+    <div class="topbar-status">
+      <span id="statusDot" class="status-dot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+    <div class="topbar-right">
+      <nav class="nav-desktop" aria-label="Primary navigation">
+        <button type="button" class="btn btn-sm" id="settingsBtn">Settings</button>
+        <a href="admin.html" class="btn btn-sm hidden" id="adminLink">Admin</a>
+        <button type="button" class="btn btn-sm" id="signOutBtn" style="color:var(--danger)">Sign out</button>
       </nav>
-    </header>
-
-    <main class="main" id="main">
-
-      <!-- ---------- PAIRING VIEW ---------- -->
-      <section class="view active" id="pairingView" aria-labelledby="pairHead">
-        <div class="pair-grid">
-          <div class="panel instructions">
-            <div class="panel-head">
-              <span class="panel-title" id="pairHead">Pair a WhatsApp Device</span>
-            </div>
-            <div class="panel-body">
-              <ol>
-                <li>Open <strong>WhatsApp</strong> on the phone that will host the assistant.</li>
-                <li>Go to <strong>Settings</strong>, then <strong>Linked Devices</strong>.</li>
-                <li>Select <strong>Link a Device</strong> and allow camera access.</li>
-                <li>Scan the code shown to the right to establish the session.</li>
-                <li>Keep the phone online. The assistant maintains a persistent link.</li>
-              </ol>
-              <div class="control-row">
-                <button type="button" class="btn-primary" id="btnStart">Start</button>
-                <button type="button" class="btn-danger" id="btnStop">Stop</button>
-                <button type="button" id="btnNewSession">New Session</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel qr-panel">
-            <div class="panel-head">
-              <span class="panel-title">Pairing Code</span>
-              <span class="panel-title-sub" id="qrStateLabel" style="margin-left:auto;">Waiting</span>
-            </div>
-            <div class="panel-body">
-              <div class="qr-stage" id="qrStage" data-state="loading" aria-live="polite">
-                <div class="qr-state qr-loading">
-                  <span class="spinner" aria-hidden="true"></span>
-                  <span>Generating pairing code…</span>
-                </div>
-                <img id="qrImage" alt="WhatsApp pairing QR code" src="" />
-                <div class="qr-state qr-connected">
-                  <span>Device linked successfully.</span>
-                </div>
-              </div>
-              <p class="qr-caption">The code refreshes automatically until a device links.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ---------- DASHBOARD VIEW ---------- -->
-      <section class="view" id="dashboardView" aria-labelledby="dashHead">
-        <h1 id="dashHead" class="visually-hidden">Live Dashboard</h1>
-
-        <div class="metrics" role="group" aria-label="Session metrics">
-          <div class="metric">
-            <div class="metric-label">Operating Mode</div>
-            <div class="metric-value" id="mMode">—</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Auto-Reply State</div>
-            <div class="metric-value" id="mAutoReply">—</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Active AI Key Index</div>
-            <div class="metric-value" id="mKeyIndex">—</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">Messages Processed</div>
-            <div class="metric-value" id="mMessages">0</div>
-          </div>
-          <div class="metric">
-            <div class="metric-label">AI Replies Sent</div>
-            <div class="metric-value accent" id="mReplies">0</div>
-          </div>
-        </div>
-
-        <div class="dash-grid">
-          <div class="panel">
-            <div class="panel-head">
-              <span class="panel-title">Session Control</span>
-            </div>
-            <div class="panel-body">
-              <p style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">
-                Stop the assistant to pause message handling, or reset the session to link a different device.
-              </p>
-              <div class="control-row" style="margin-top:0;">
-                <button type="button" class="btn-danger" id="btnStopDash">Stop</button>
-              </div>
-              <div class="control-row">
-                <button type="button" id="btnResetSession">Reset &amp; Pair New Device</button>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel-head terminal-head">
-              <span class="panel-title">Live Event Terminal</span>
-              <div class="terminal-controls">
-                <label class="checkbox" for="autoScroll">
-                  <input type="checkbox" id="autoScroll" checked />
-                  Auto-scroll
-                </label>
-                <button type="button" class="btn-sm" id="btnClearLogs">Clear</button>
-              </div>
-            </div>
-            <div class="terminal" id="logTerminal" role="log" aria-live="polite" tabindex="0">
-              <div class="log-empty">Awaiting events…</div>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <!-- ============ SETTINGS MODAL ============ -->
-  <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-    <div class="modal modal-lg">
-      <div class="modal-head">
-        <span class="modal-title" id="settingsTitle">Settings</span>
-        <button type="button" class="modal-close" id="settingsClose" aria-label="Close settings">×</button>
-      </div>
-      <div class="modal-body">
-        <div class="feedback ok" id="settingsOk" role="status"></div>
-        <div class="feedback err" id="settingsErr" role="alert"></div>
-        <form id="settingsForm" novalidate>
-          <div class="field">
-            <label for="setProvider">AI Provider</label>
-            <select id="setProvider" name="provider">
-              <option value="auto">Auto</option>
-              <option value="nvidia">NVIDIA NIM</option>
-              <option value="groq">Groq</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="setOwnerNumber">Authorized Owner WhatsApp Number</label>
-            <input type="text" id="setOwnerNumber" name="ownerNumber" placeholder="e.g. 15551234567" inputmode="numeric" />
-            <div class="field-hint">Country code without symbols. This number can command the assistant.</div>
-          </div>
-          <div class="field">
-            <label for="setNvidiaKeys">NVIDIA API Keys (comma-separated)</label>
-            <textarea id="setNvidiaKeys" name="nvidiaKeys" placeholder="nvapi-xxxx, nvapi-yyyy"></textarea>
-            <div class="key-status" id="nvidiaKeyStatus"><span class="dot"></span><span>Not verified</span></div>
-          </div>
-          <div class="field">
-            <label for="setGroqKeys">Groq API Keys (comma-separated)</label>
-            <textarea id="setGroqKeys" name="groqKeys" placeholder="gsk_xxxx, gsk_yyyy"></textarea>
-            <div class="key-status" id="groqKeyStatus"><span class="dot"></span><span>Not verified</span></div>
-          </div>
-          <div class="field">
-            <label for="setSystemPrompt">Custom System Prompt</label>
-            <textarea id="setSystemPrompt" name="systemPrompt" style="min-height:120px;" placeholder="Define the assistant's persona, tone, and boundaries."></textarea>
-          </div>
-        </form>
-      </div>
-      <div class="modal-foot">
-        <button type="button" id="settingsCancel">Cancel</button>
-        <button type="button" class="btn-primary" id="settingsSave">Save Changes</button>
-      </div>
+      <button type="button" class="hamburger btn btn-sm" id="hamburgerBtn" aria-label="Open menu" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="1.5"/><rect y="7" width="16" height="1.5"/><rect y="12" width="16" height="1.5"/></svg>
+      </button>
     </div>
-  </div>
+  </header>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="main-content" id="mainContent">
+
+    <!-- ===== PAIRING VIEW (disconnected) ===== -->
+    <section id="pairingView" class="pairing-grid" aria-label="Device pairing">
+
+      <div class="card">
+        <div class="card-title">Pairing Instructions</div>
+        <ol class="instructions-list">
+          <li>Open WhatsApp on your phone</li>
+          <li>Go to Settings then Linked Devices</li>
+          <li>Tap Link a Device</li>
+          <li>Point your camera at the QR code shown here</li>
+          <li>Wait for the connection confirmation</li>
+        </ol>
+        <div class="divider"></div>
+        <div class="card-title">Session Controls</div>
+        <div class="controls-row">
+          <button type="button" class="btn btn-primary" id="btnStart">Start</button>
+          <button type="button" class="btn" id="btnStop">Stop</button>
+          <button type="button" class="btn" id="btnNewSession">New Session</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">QR Code</div>
+        <div class="qr-container">
+          <div class="qr-frame" id="qrFrame">
+            <div id="qrLoading" class="qr-loading">
+              <div class="spinner"></div>
+            </div>
+            <img id="qrImage" class="hidden" alt="WhatsApp pairing QR code" src="">
+            <div id="qrConnected" class="qr-connected-msg hidden">Connected</div>
+          </div>
+          <div id="qrStatusText" class="qr-status-text">Waiting for session start</div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ===== DASHBOARD VIEW (connected) ===== -->
+    <section id="dashboardView" class="hidden" aria-label="Live dashboard">
+
+      <!-- Metrics Strip -->
+      <div class="metrics-strip" role="region" aria-label="Session metrics">
+        <div class="metric-cell">
+          <span class="metric-label">Mode</span>
+          <span class="metric-value" id="metricMode">—</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">Auto-Reply</span>
+          <span class="metric-value" id="metricAutoReply">—</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">AI Key</span>
+          <span class="metric-value" id="metricKeyIndex">—</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">Messages</span>
+          <span class="metric-value" id="metricTotalMsgs">0</span>
+        </div>
+        <div class="metric-cell">
+          <span class="metric-label">AI Replies</span>
+          <span class="metric-value" id="metricAiReplies">0</span>
+        </div>
+      </div>
+
+      <!-- Dashboard Layout: Side Panel + Terminal -->
+      <div class="dash-layout">
+
+        <!-- Side: Session Controls -->
+        <div class="card">
+          <div class="card-title">Session</div>
+          <div class="session-controls">
+            <button type="button" class="btn btn-danger" id="btnStopSession">Stop Session</button>
+            <button type="button" class="btn" id="btnResetPair">Reset and Pair New Device</button>
+          </div>
+        </div>
+
+        <!-- Main: Terminal -->
+        <div class="card">
+          <div class="terminal-header">
+            <div class="terminal-header-left">
+              <h3>Event Log</h3>
+            </div>
+            <div class="terminal-controls">
+              <label class="checkbox-label">
+                <input type="checkbox" id="chkAutoScroll" checked>
+                Auto-scroll
+              </label>
+              <button type="button" class="btn btn-sm" id="btnClearLogs">Clear</button>
+            </div>
+          </div>
+          <div class="log-stream" id="logStream" role="log" aria-live="polite" aria-label="Live event log"></div>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
 
   <script src="app.js"></script>
 </body>

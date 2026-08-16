@@ -10,7 +10,10 @@ jobs:
     name: Deploy to Alwaysdata Runtime
     runs-on: ubuntu-latest
     steps:
-      - name: Execute Remote SSH Commands
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Alwaysdata via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.ALWAYSDATA_SSH_HOST }}
@@ -19,23 +22,45 @@ jobs:
           key: ${{ secrets.ALWAYSDATA_SSH_KEY }}
           port: 22
           script: |
-            echo "🚀 Navigating to project directory..."
-            if [ -d "$HOME/whatsapp-bot-main" ]; then
-              cd $HOME/whatsapp-bot-main
-            elif [ -d "$HOME/www" ]; then
-              cd $HOME/www
-            else
-              cd $HOME
+            TARGET_DIR="$HOME/whatsapp-bot-main"
+            if [ -d "$HOME/whatsapp-bot" ]; then
+              TARGET_DIR="$HOME/whatsapp-bot"
+            elif [ -d "$HOME/app" ]; then
+              TARGET_DIR="$HOME/app"
+            elif [ -d "$HOME/www" ] && [ -f "$HOME/www/package.json" ]; then
+              TARGET_DIR="$HOME/www"
             fi
 
-            echo "📥 Pulling latest changes from GitHub..."
-            git pull origin main
+            echo "🚀 Target deployment directory: $TARGET_DIR"
 
-            echo "📦 Installing dependencies..."
-            npm install --production
+            if [ ! -d "$TARGET_DIR/.git" ]; then
+              echo "📥 Repository not initialized on server. Setting up fresh clone..."
+              mkdir -p "$TARGET_DIR"
+              cd "$TARGET_DIR"
+              git init
+              git remote add origin https://github.com/${{ github.repository }}.git 2>/dev/null || git remote set-url origin https://github.com/${{ github.repository }}.git
+              git fetch origin main
+              git reset --hard origin/main
+              git checkout -B main origin/main
+            else
+              cd "$TARGET_DIR"
+              echo "📥 Pulling latest commits from origin main..."
+              git fetch origin main
+              git reset --hard origin/main
+            fi
 
-            echo "🔄 Restarting Node.js process..."
-            # Trigger process reload
-            pkill -u $USER -f "node.*server" || pkill -u $USER -f "node.*index" || true
+            echo "📦 Installing production dependencies..."
+            npm install --omit=dev
+
+            if [ -d "$HOME/www" ] && [ "$TARGET_DIR" != "$HOME/www" ]; then
+              echo "🔄 Syncing updated files to $HOME/www..."
+              cp -ru "$TARGET_DIR"/* "$HOME/www/" 2>/dev/null || cp -r "$TARGET_DIR"/* "$HOME/www/" 2>/dev/null || true
+              cd "$HOME/www" && npm install --omit=dev 2>/dev/null || true
+            fi
+
+            echo "🔄 Triggering Node.js process reload..."
+            mkdir -p tmp
             touch tmp/restart.txt 2>/dev/null || true
-            echo "✅ Deployment to Alwaysdata completed successfully!"
+            pkill -f "node.*src/index.js" 2>/dev/null || pkill -f "node.*src/server.js" 2>/dev/null || true
+
+            echo "✅ Deployment to Alwaysdata finished successfully!"

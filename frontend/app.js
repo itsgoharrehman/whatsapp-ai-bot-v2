@@ -22,6 +22,20 @@ document.addEventListener("DOMContentLoaded", () => {
   const authLogoutBtn = document.getElementById("authLogoutBtn");
   const dashboardLogoutBtn = document.getElementById("dashboardLogoutBtn");
 
+  // Mobile Hamburger Elements
+  const authMobileMenuWrapper = document.getElementById("authMobileMenuWrapper");
+  const dashMobileMenuWrapper = document.getElementById("dashMobileMenuWrapper");
+  const authHamburgerBtn = document.getElementById("authHamburgerBtn");
+  const dashHamburgerBtn = document.getElementById("dashHamburgerBtn");
+  const authMobileMenu = document.getElementById("authMobileMenu");
+  const dashMobileMenu = document.getElementById("dashMobileMenu");
+  const mobileAuthSettingsBtn = document.getElementById("mobileAuthSettingsBtn");
+  const mobileDashSettingsBtn = document.getElementById("mobileDashSettingsBtn");
+  const mobileAuthAdminLink = document.getElementById("mobileAuthAdminLink");
+  const mobileDashAdminLink = document.getElementById("mobileDashAdminLink");
+  const mobileAuthLogoutBtn = document.getElementById("mobileAuthLogoutBtn");
+  const mobileDashLogoutBtn = document.getElementById("mobileDashLogoutBtn");
+
   // Status Indicators
   const authStatus = document.getElementById("authStatus");
   const dashboardStatus = document.getElementById("dashboardStatus");
@@ -111,6 +125,10 @@ document.addEventListener("DOMContentLoaded", () => {
     loginOverlay.hidden = false;
     authActions.hidden = true;
     dashActions.hidden = true;
+    if (authMobileMenuWrapper) authMobileMenuWrapper.hidden = true;
+    if (dashMobileMenuWrapper) dashMobileMenuWrapper.hidden = true;
+    if (authMobileMenu) authMobileMenu.hidden = true;
+    if (dashMobileMenu) dashMobileMenu.hidden = true;
   }
 
   // ==========================================
@@ -141,14 +159,72 @@ document.addEventListener("DOMContentLoaded", () => {
     loginOverlay.hidden = true;
     authActions.hidden = false;
     dashActions.hidden = false;
+    if (authMobileMenuWrapper) authMobileMenuWrapper.hidden = false;
+    if (dashMobileMenuWrapper) dashMobileMenuWrapper.hidden = false;
 
     // Show Admin Link if user is admin
     const isAdmin = currentUser && currentUser.role === "admin";
     if (authAdminLink) authAdminLink.hidden = !isAdmin;
     if (dashboardAdminLink) dashboardAdminLink.hidden = !isAdmin;
+    if (mobileAuthAdminLink) mobileAuthAdminLink.hidden = !isAdmin;
+    if (mobileDashAdminLink) mobileDashAdminLink.hidden = !isAdmin;
 
     startStatusPolling();
     setupLogStream();
+  }
+
+  // Hamburger Menu Toggles
+  if (authHamburgerBtn && authMobileMenu) {
+    authHamburgerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      authMobileMenu.hidden = !authMobileMenu.hidden;
+    });
+  }
+
+  if (dashHamburgerBtn && dashMobileMenu) {
+    dashHamburgerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dashMobileMenu.hidden = !dashMobileMenu.hidden;
+    });
+  }
+
+  // Close menus when clicking outside
+  document.addEventListener("click", (e) => {
+    if (authMobileMenu && !authMobileMenu.hidden && !e.target.closest("#authMobileMenuWrapper")) {
+      authMobileMenu.hidden = true;
+    }
+    if (dashMobileMenu && !dashMobileMenu.hidden && !e.target.closest("#dashMobileMenuWrapper")) {
+      dashMobileMenu.hidden = true;
+    }
+  });
+
+  // Mobile Menu Action Handlers
+  if (mobileAuthSettingsBtn) {
+    mobileAuthSettingsBtn.addEventListener("click", () => {
+      if (authMobileMenu) authMobileMenu.hidden = true;
+      openSettings();
+    });
+  }
+
+  if (mobileDashSettingsBtn) {
+    mobileDashSettingsBtn.addEventListener("click", () => {
+      if (dashMobileMenu) dashMobileMenu.hidden = true;
+      openSettings();
+    });
+  }
+
+  if (mobileAuthLogoutBtn) {
+    mobileAuthLogoutBtn.addEventListener("click", () => {
+      if (authMobileMenu) authMobileMenu.hidden = true;
+      handleLogout();
+    });
+  }
+
+  if (mobileDashLogoutBtn) {
+    mobileDashLogoutBtn.addEventListener("click", () => {
+      if (dashMobileMenu) dashMobileMenu.hidden = true;
+      handleLogout();
+    });
   }
 
   // Login Form Submission

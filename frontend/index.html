@@ -20,12 +20,29 @@
           <span class="subtitle">Personal Assistant</span>
         </div>
         <div class="topbar-meta">
+          <!-- Desktop Navigation -->
           <div class="topbar-actions" id="authActions" hidden>
             <button id="authSettingsBtn" class="nav-btn" type="button">Settings</button>
             <a id="authAdminLink" class="nav-link" href="admin.html" hidden>Admin</a>
             <button id="authLogoutBtn" class="nav-btn" type="button">Sign Out</button>
           </div>
-          <div id="authStatus" class="status disconnected" role="status" aria-live="polite">
+
+          <!-- Mobile Hamburger Button & Dropdown Box -->
+          <div class="mobile-menu-wrapper" id="authMobileMenuWrapper" hidden>
+            <button id="authHamburgerBtn" class="hamburger-btn" type="button" aria-label="Toggle navigation menu">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+            <div id="authMobileMenu" class="mobile-nav-box" hidden>
+              <button id="mobileAuthSettingsBtn" class="mobile-nav-item" type="button">Settings</button>
+              <a id="mobileAuthAdminLink" class="mobile-nav-item" href="admin.html" hidden>Admin Console</a>
+              <button id="mobileAuthLogoutBtn" class="mobile-nav-item item-danger" type="button">Sign Out</button>
+            </div>
+          </div>
+
+          <!-- Topbar Status Indicator (Hidden on mobile < 768px) -->
+          <div id="authStatus" class="status disconnected topbar-status" role="status" aria-live="polite">
             <span class="status-marker" aria-hidden="true"></span>
             <span class="status-text">DISCONNECTED</span>
           </div>
@@ -102,13 +119,30 @@
           <span class="subtitle">Personal Assistant</span>
         </div>
         <div class="topbar-meta">
+          <!-- Desktop Navigation -->
           <div class="topbar-actions" id="dashActions" hidden>
             <button id="dashboardSettingsBtn" class="nav-btn" type="button">Settings</button>
             <a id="dashboardAdminLink" class="nav-link" href="admin.html" hidden>Admin</a>
             <button id="dashboardLogoutBtn" class="nav-btn" type="button">Sign Out</button>
           </div>
-          <span class="environment">Production</span>
-          <div id="dashboardStatus" class="status connected" role="status">
+
+          <!-- Mobile Hamburger Button & Dropdown Box -->
+          <div class="mobile-menu-wrapper" id="dashMobileMenuWrapper" hidden>
+            <button id="dashHamburgerBtn" class="hamburger-btn" type="button" aria-label="Toggle navigation menu">
+              <span></span>
+              <span></span>
+              <span></span>
+            </button>
+            <div id="dashMobileMenu" class="mobile-nav-box" hidden>
+              <button id="mobileDashSettingsBtn" class="mobile-nav-item" type="button">Settings</button>
+              <a id="mobileDashAdminLink" class="mobile-nav-item" href="admin.html" hidden>Admin Console</a>
+              <button id="mobileDashLogoutBtn" class="mobile-nav-item item-danger" type="button">Sign Out</button>
+            </div>
+          </div>
+
+          <!-- Topbar Status Indicator (Hidden on mobile < 768px) -->
+          <span class="environment topbar-status">Production</span>
+          <div id="dashboardStatus" class="status connected topbar-status" role="status">
             <span class="status-marker" aria-hidden="true"></span>
             <span id="dashboardStatusText" class="status-text">CONNECTED</span>
           </div>

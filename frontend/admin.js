@@ -14,6 +14,22 @@ document.addEventListener("DOMContentLoaded", () => {
   const createUserForm = document.getElementById("createUserForm");
   const createUserError = document.getElementById("createUserError");
   const adminLogoutBtn = document.getElementById("adminLogoutBtn");
+  const adminHamburgerBtn = document.getElementById("adminHamburgerBtn");
+  const adminMobileMenu = document.getElementById("adminMobileMenu");
+  const mobileAdminLogoutBtn = document.getElementById("mobileAdminLogoutBtn");
+
+  if (adminHamburgerBtn && adminMobileMenu) {
+    adminHamburgerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      adminMobileMenu.hidden = !adminMobileMenu.hidden;
+    });
+  }
+
+  document.addEventListener("click", (e) => {
+    if (adminMobileMenu && !adminMobileMenu.hidden && !e.target.closest(".mobile-menu-wrapper")) {
+      adminMobileMenu.hidden = true;
+    }
+  });
 
   async function apiFetch(url, options = {}) {
     const headers = options.headers || {};

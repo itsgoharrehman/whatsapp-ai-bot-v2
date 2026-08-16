@@ -18,8 +18,24 @@
         <span class="subtitle">Multi-Tenant Management</span>
       </div>
       <div class="topbar-meta">
-        <a class="nav-link" href="index.html">&larr; Back to Dashboard</a>
-        <button id="adminLogoutBtn" class="nav-btn" type="button">Sign Out</button>
+        <!-- Desktop Nav -->
+        <div class="topbar-actions admin-desktop-actions">
+          <a class="nav-link" href="index.html">&larr; Back to Dashboard</a>
+          <button id="adminLogoutBtn" class="nav-btn" type="button">Sign Out</button>
+        </div>
+
+        <!-- Mobile Hamburger Menu -->
+        <div class="mobile-menu-wrapper">
+          <button id="adminHamburgerBtn" class="hamburger-btn" type="button" aria-label="Toggle navigation menu">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <div id="adminMobileMenu" class="mobile-nav-box" hidden>
+            <a class="mobile-nav-item" href="index.html">&larr; Dashboard</a>
+            <button id="mobileAdminLogoutBtn" class="mobile-nav-item item-danger" type="button">Sign Out</button>
+          </div>
+        </div>
       </div>
     </div>
   </header>

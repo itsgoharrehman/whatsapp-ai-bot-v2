@@ -390,10 +390,6 @@ export function createServer() {
       }
     }
     if (!st) {
-      const session = sessionManager.getSession(req.user.id);
-      if (session && session.status === 'DISCONNECTED' && !session.isStopping) {
-        session.start(false).catch(() => {});
-      }
       st = sessionManager.getStatus(req.user.id);
     }
 

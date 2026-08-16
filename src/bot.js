@@ -72,6 +72,7 @@ export class UserBotSession extends EventEmitter {
     this.botJid = null;
     this.botLid = null;
     this.isStopping = false;
+    this.isStarting = false;
     this.sentBotMsgIds = new BoundedTtlSet(2000, 30 * 60 * 1000);
     this.processedInboundMsgIds = new BoundedTtlSet(2000, 15 * 60 * 1000);
     this.reconnectTimer = null;
@@ -85,13 +86,19 @@ export class UserBotSession extends EventEmitter {
   }
 
   async start(forceNewSession = false) {
-    if (this.status === 'CONNECTING' || (this.status === 'CONNECTED' && !forceNewSession)) return;
+    if (this.isStarting) return;
+    if (this.status === 'CONNECTED' && !forceNewSession) return;
+
+    this.isStarting = true;
+    this.isStopping = false;
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
     if (!makeWASocket) {
       this.status = 'DISCONNECTED';
+      this.isStarting = false;
       this.emit('status', this.status);
       return;
     }
@@ -109,13 +116,22 @@ export class UserBotSession extends EventEmitter {
       fs.mkdirSync(this.sessionDir, { recursive: true });
     }
 
-    this.isStopping = false;
     this.status = 'CONNECTING';
     this.emit('status', this.status);
 
     try {
       const { state, saveCreds } = await useMultiFileAuthState(this.sessionDir);
-      const { version } = await fetchLatestBaileysVersion();
+      
+      let version;
+      try {
+        const verData = await Promise.race([
+          fetchLatestBaileysVersion(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500))
+        ]);
+        version = verData.version;
+      } catch (_) {
+        version = [2, 3000, 1015901307];
+      }
 
       this.sock = makeWASocket({
         version,
@@ -134,7 +150,11 @@ export class UserBotSession extends EventEmitter {
 
         if (qr && this.status !== 'CONNECTED') {
           this.status = 'QR_READY';
-          if (QRCode) this.qrCodeDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 6 });
+          if (QRCode) {
+            try {
+              this.qrCodeDataUrl = await QRCode.toDataURL(qr, { margin: 2, scale: 6 });
+            } catch (_) {}
+          }
           this.emit('qr', this.qrCodeDataUrl);
           this.emit('status', this.status);
         }
@@ -163,7 +183,6 @@ export class UserBotSession extends EventEmitter {
 
           if (!this.isStopping && !isLoggedOut) {
             if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-            // Instant 1.5s reconnect for 515 (restartRequired) handshake
             const delay = statusCode === 515 ? 1000 : 3000;
             this.reconnectTimer = setTimeout(() => this.start(false), delay);
           }
@@ -181,6 +200,8 @@ export class UserBotSession extends EventEmitter {
       this.userLogger.error('Failed to initialize WhatsApp socket:', err.message);
       this.status = 'DISCONNECTED';
       this.emit('status', this.status);
+    } finally {
+      this.isStarting = false;
     }
   }
 

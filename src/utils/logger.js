@@ -7,29 +7,47 @@ class LiveLogger extends EventEmitter {
     this.maxHistory = 300;
   }
 
+  sanitize(text) {
+    if (!text || typeof text !== 'string') return text;
+    return text
+      .replace(/(gsk_[a-zA-Z0-9_-]{6})[a-zA-Z0-9_-]+([a-zA-Z0-9_-]{4})/g, '$1...$2')
+      .replace(/(nvapi-[a-zA-Z0-9_-]{6})[a-zA-Z0-9_-]+([a-zA-Z0-9_-]{4})/g, '$1...$2')
+      .replace(/(Bearer\s+[a-zA-Z0-9._-]{6})[a-zA-Z0-9._-]+/gi, '$1[REDACTED]')
+      .replace(/("password"\s*:\s*")[^"]+(")/gi, '$1[REDACTED]$2')
+      .replace(/("salt"\s*:\s*")[^"]+(")/gi, '$1[REDACTED]$2')
+      .replace(/("passwordHash"\s*:\s*")[^"]+(")/gi, '$1[REDACTED]$2')
+      .replace(/data:image\/[a-zA-Z0-9.+-]+;base64,[a-zA-Z0-9+/=]{40,}/gi, '[BASE64_IMAGE_PAYLOAD]');
+  }
+
   log(level, message, details = null, userId = null) {
     const timestamp = new Date().toISOString();
-    const isTagged = message && typeof message === 'string' && message.startsWith('[');
+    const cleanMessage = this.sanitize(typeof message === 'string' ? message : JSON.stringify(message));
+    let cleanDetails = null;
+    if (details) {
+      cleanDetails = this.sanitize(typeof details === 'object' ? JSON.stringify(details) : String(details));
+    }
+
+    const isTagged = cleanMessage && cleanMessage.startsWith('[');
     const userTag = userId ? `[USER:${userId}] ` : '';
     const formatted = isTagged
-      ? `[${timestamp}] ${userTag}${message}`
-      : `[${timestamp}] [${level.toUpperCase()}] ${userTag}${message}`;
+      ? `[${timestamp}] ${userTag}${cleanMessage}`
+      : `[${timestamp}] [${level.toUpperCase()}] ${userTag}${cleanMessage}`;
 
     if (level === 'error') {
-      console.error(formatted, details || '');
+      console.error(formatted, cleanDetails || '');
     } else if (level === 'warn') {
-      console.warn(formatted, details || '');
+      console.warn(formatted, cleanDetails || '');
     } else {
-      console.log(formatted, details || '');
+      console.log(formatted, cleanDetails || '');
     }
 
     const logEntry = {
       id: Date.now() + Math.random().toString(36).substr(2, 5),
       timestamp,
       level,
-      message,
+      message: cleanMessage,
       userId: userId || null,
-      details: details ? (typeof details === 'object' ? JSON.stringify(details) : String(details)) : null
+      details: cleanDetails
     };
 
     this.logsHistory.push(logEntry);

@@ -90,7 +90,7 @@ export const config = {
   adminPassword: process.env.ADMIN_PASSWORD || '',
   encryptionSecret: process.env.ENCRYPTION_SECRET || process.env.APP_SECRET || '',
 
-  internalApiKey: process.env.INTERNAL_API_KEY || process.env.ALWAYSDATA_API_KEY || 'default-internal-service-secret-2026',
+  internalApiKey: process.env.INTERNAL_API_KEY || process.env.ALWAYSDATA_API_KEY || '',
   alwaysdataBaseUrl: process.env.ALWAYSDATA_BASE_URL || '',
 
   sessionDir: path.resolve(ROOT_DIR, process.env.SESSION_DIR || './auth_sessions'),
@@ -102,6 +102,6 @@ export function getSystemPrompt() {
   try {
     return fs.readFileSync(config.systemPromptPath, 'utf8');
   } catch (err) {
-    return "You are Mark Zuckerberg, Gohar's Personal AI Assistant.";
+    return "You are a helpful and intelligent Personal AI Assistant.";
   }
 }

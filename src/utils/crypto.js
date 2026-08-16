@@ -27,7 +27,7 @@ function getOrGenerateSecret() {
     fs.writeFileSync(SECRET_FILE, newSecret, { encoding: 'utf8', mode: 0o600 });
     return crypto.createHash('sha256').update(newSecret).digest();
   } catch (err) {
-    return crypto.createHash('sha256').update('dev-fallback-whatsapp-bot-internal-secret-2026').digest();
+    return crypto.randomBytes(32);
   }
 }
 

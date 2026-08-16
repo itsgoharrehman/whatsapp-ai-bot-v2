@@ -246,6 +246,7 @@ console.log('✔ Test 15 passed: Media type detection and multimodal payload pac
 // =========================================================================
 // Test 16: Express Server HTTP Multi-Tenancy & Authorization Enforcement
 // =========================================================================
+config.internalApiKey = config.internalApiKey || 'test-runner-internal-key-2026';
 const app = createServer();
 const server = await new Promise(resolve => {
   const s = app.listen(0, '127.0.0.1', () => resolve(s));

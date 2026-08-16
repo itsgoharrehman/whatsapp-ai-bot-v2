@@ -81,7 +81,13 @@ export function requireInternalAuth(secret) {
     const nonce = req.headers['x-internal-nonce'];
     const signature = req.headers['x-internal-signature'];
 
-    if (!key || key !== secret) {
+    if (!key || typeof key !== 'string' || typeof secret !== 'string') {
+      return res.status(401).json({ error: 'Unauthorized: Invalid internal secret' });
+    }
+
+    const keyBuf = Buffer.from(key);
+    const secretBuf = Buffer.from(secret);
+    if (keyBuf.length !== secretBuf.length || !crypto.timingSafeEqual(keyBuf, secretBuf)) {
       return res.status(401).json({ error: 'Unauthorized: Invalid internal secret' });
     }
 

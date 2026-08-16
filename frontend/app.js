@@ -118,6 +118,12 @@
       if (dom.adminLink) dom.adminLink.classList.toggle('hidden', !isAdmin);
       if (dom.mobileAdminBtn) dom.mobileAdminBtn.classList.toggle('hidden', !isAdmin);
 
+      // Check status and start session cleanly once if currently disconnected
+      const st = await apiFetch('/api/status').catch(() => null);
+      if (st && st.status === 'DISCONNECTED' && !st.connected) {
+        apiFetch('/api/control/start', { method: 'POST' }).catch(() => {});
+      }
+
       // Start periodic status polling and load settings
       startStatusPolling();
       loadSettings().catch(() => {});

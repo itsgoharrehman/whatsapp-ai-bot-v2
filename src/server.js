@@ -397,6 +397,7 @@ export function createServer() {
     }
   });
 
+  app.get(['/admin', '/admin.html'], (req, res) => res.sendFile(path.join(ROOT_DIR, 'frontend', 'admin.html')));
   app.get('*', (req, res) => res.sendFile(path.join(ROOT_DIR, 'frontend', 'index.html')));
   return app;
 }

@@ -17,14 +17,13 @@
       <div class="topbar-inner">
         <div class="identity">
           <h1 id="authBrand" class="brand">Mark Zuckerberg</h1>
-          <span class="subtitle" id="authSubtitle">Personal Assistant</span>
+          <span class="subtitle">Personal Assistant</span>
         </div>
         <div class="topbar-meta">
-          <div class="user-session-controls">
-            <span class="current-user-badge" id="authUsernameBadge"></span>
-            <button id="authSettingsBtn" class="button-sm" type="button">⚙️ Settings</button>
-            <button id="authAdminBtn" class="button-sm admin-btn" hidden type="button">🛡️ Admin</button>
-            <button id="authLogoutBtn" class="button-sm button-logout" type="button">Logout</button>
+          <div class="topbar-actions" id="authActions" hidden>
+            <button id="authSettingsBtn" class="nav-btn" type="button">Settings</button>
+            <a id="authAdminLink" class="nav-link" href="admin.html" hidden>Admin</a>
+            <button id="authLogoutBtn" class="nav-btn" type="button">Sign Out</button>
           </div>
           <div id="authStatus" class="status disconnected" role="status" aria-live="polite">
             <span class="status-marker" aria-hidden="true"></span>
@@ -100,14 +99,13 @@
       <div class="topbar-inner">
         <div class="identity">
           <h1 id="dashboardBrand" class="brand">Mark Zuckerberg</h1>
-          <span class="subtitle" id="dashboardSubtitle">Personal Assistant</span>
+          <span class="subtitle">Personal Assistant</span>
         </div>
         <div class="topbar-meta">
-          <div class="user-session-controls">
-            <span class="current-user-badge" id="dashboardUsernameBadge"></span>
-            <button id="dashboardSettingsBtn" class="button-sm" type="button">⚙️ Settings</button>
-            <button id="dashboardAdminBtn" class="button-sm admin-btn" hidden type="button">🛡️ Admin</button>
-            <button id="dashboardLogoutBtn" class="button-sm button-logout" type="button">Logout</button>
+          <div class="topbar-actions" id="dashActions" hidden>
+            <button id="dashboardSettingsBtn" class="nav-btn" type="button">Settings</button>
+            <a id="dashboardAdminLink" class="nav-link" href="admin.html" hidden>Admin</a>
+            <button id="dashboardLogoutBtn" class="nav-btn" type="button">Sign Out</button>
           </div>
           <span class="environment">Production</span>
           <div id="dashboardStatus" class="status connected" role="status">
@@ -142,44 +140,41 @@
         </div>
       </dl>
 
-      <div class="dashboard-layout">
-        <aside class="control-panel" aria-labelledby="controlsHeading">
-          <h2 id="controlsHeading" class="panel-heading">Service Controls</h2>
-          <div class="control-body">
-            <div class="control-actions">
-              <button id="dashboardStopBtn" class="button-danger" type="button">Stop Service</button>
-              <button id="dashboardNewSessionBtn" type="button">New Session &amp; Pair QR</button>
-            </div>
-            <div class="session-confirmation">
-              <p class="session-confirmation-title" id="sessionTitle">Active Session Authenticated</p>
-              <p class="session-confirmation-copy" id="sessionSubtitle">WhatsApp socket connected. QR code hidden.</p>
-            </div>
+      <div class="dashboard-controls">
+        <div class="dashboard-controls-header">
+          <div class="dashboard-controls-meta">
+            <h2 id="sessionTitle" class="dashboard-controls-title">Active Session Authenticated</h2>
+            <p id="sessionSubtitle" class="dashboard-controls-copy">WhatsApp socket connected. QR code hidden.</p>
           </div>
-        </aside>
-
-        <section class="terminal-panel" aria-labelledby="terminalHeading">
-          <header class="terminal-header">
-            <h2 id="terminalHeading" class="terminal-title">Live Event Terminal Stream</h2>
-            <div class="terminal-tools">
-              <label class="checkbox-label" for="autoScroll">
-                <input id="autoScroll" type="checkbox" checked>
-                <span>Auto-scroll</span>
-              </label>
-              <button id="clearLog" type="button">Clear log</button>
-            </div>
-          </header>
-          <div id="logArea" class="log-area" role="log" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
-        </section>
+          <div class="dashboard-controls-buttons" aria-label="Active session actions">
+            <button id="dashboardStopBtn" class="button-danger" type="button">Stop</button>
+            <button id="dashboardNewSessionBtn" type="button">Reset &amp; Pair New Device</button>
+          </div>
+        </div>
       </div>
+
+      <section class="terminal-panel" aria-labelledby="terminalHeading">
+        <div class="terminal-header">
+          <h2 id="terminalHeading" class="terminal-title">Live Event Terminal Stream</h2>
+          <div class="terminal-actions">
+            <button id="clearLog" type="button" aria-label="Clear terminal output">Clear</button>
+            <label class="terminal-toggle">
+              <input type="checkbox" id="autoScroll" checked>
+              <span>Auto-scroll</span>
+            </label>
+          </div>
+        </div>
+        <pre id="logArea" class="terminal-body" role="log" aria-atomic="false" aria-relevant="additions" tabindex="0"></pre>
+      </section>
     </main>
   </section>
 
-  <!-- Login Modal Overlay -->
+  <!-- Login Modal -->
   <div id="loginOverlay" class="modal-overlay" hidden>
-    <div class="modal-card login-card" role="dialog" aria-labelledby="loginTitle">
+    <div class="modal-card modal-sm" role="dialog" aria-labelledby="loginTitle">
       <div class="modal-header">
         <h2 id="loginTitle" class="modal-title">Sign In</h2>
-        <p class="modal-subtitle">Access your personal WhatsApp Assistant session</p>
+        <p class="modal-subtitle">Access your WhatsApp Assistant session</p>
       </div>
       <form id="loginForm" class="modal-form">
         <div class="form-group">
@@ -209,13 +204,13 @@
         <div class="form-group">
           <label for="settingsProvider">AI Provider</label>
           <select id="settingsProvider" class="form-select">
-            <option value="nvidia">NVIDIA NIM (Recommended)</option>
+            <option value="nvidia">NVIDIA NIM</option>
             <option value="groq">Groq</option>
             <option value="auto">Auto (Failover)</option>
           </select>
         </div>
         <div class="form-group">
-          <label for="settingsOwnerNumber">Authorized Owner WhatsApp Number (International format, digits only)</label>
+          <label for="settingsOwnerNumber">Authorized Owner WhatsApp Number</label>
           <input id="settingsOwnerNumber" type="text" placeholder="e.g. 923001234567">
           <span class="form-hint">Number allowed to issue owner commands and bypass triggers in self-chat.</span>
         </div>
@@ -230,7 +225,7 @@
           <span id="groqKeyStatus" class="key-status-text">Status: Checking...</span>
         </div>
         <div class="form-group">
-          <label for="settingsSystemPrompt">Custom System Prompt (Optional)</label>
+          <label for="settingsSystemPrompt">Custom System Prompt</label>
           <textarea id="settingsSystemPrompt" rows="4" placeholder="Leave empty to use default system prompt"></textarea>
         </div>
         <div id="settingsSuccess" class="form-success" hidden>Settings saved successfully!</div>
@@ -240,81 +235,6 @@
           <button id="cancelSettingsBtn" type="button">Cancel</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- Admin User Management Modal -->
-  <div id="adminModal" class="modal-overlay" hidden>
-    <div class="modal-card modal-lg" role="dialog" aria-labelledby="adminTitle">
-      <div class="modal-header">
-        <h2 id="adminTitle" class="modal-title">Admin Management Console</h2>
-        <button id="closeAdminBtn" class="modal-close-btn" type="button" aria-label="Close">&times;</button>
-      </div>
-      <div class="admin-content">
-        <div class="admin-top-actions">
-          <h3 class="admin-section-title">User Accounts</h3>
-          <button id="showAddUserBtn" class="button-primary" type="button">+ Add User</button>
-        </div>
-
-        <div id="addUserFormContainer" class="add-user-box" hidden>
-          <form id="addUserForm">
-            <h4 class="box-title">Create New Tenant User</h4>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="newUsername">Username</label>
-                <input id="newUsername" type="text" required>
-              </div>
-              <div class="form-group">
-                <label for="newPassword">Password</label>
-                <input id="newPassword" type="password" required>
-              </div>
-              <div class="form-group">
-                <label for="newRole">Role</label>
-                <select id="newRole" class="form-select">
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label for="newOwnerNumber">Owner Phone Number</label>
-                <input id="newOwnerNumber" type="text" placeholder="e.g. 923001234567">
-              </div>
-              <div class="form-group">
-                <label for="newProvider">Default Provider</label>
-                <select id="newProvider" class="form-select">
-                  <option value="nvidia">NVIDIA</option>
-                  <option value="groq">Groq</option>
-                </select>
-              </div>
-            </div>
-            <div id="addUserError" class="form-error" hidden></div>
-            <div class="form-actions">
-              <button class="button-primary" type="submit">Create Account</button>
-              <button id="cancelAddUserBtn" type="button">Cancel</button>
-            </div>
-          </form>
-        </div>
-
-        <div class="table-container">
-          <table class="admin-table">
-            <thead>
-              <tr>
-                <th>Username</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>WhatsApp Bot</th>
-                <th>Messages</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="usersTableBody">
-              <tr><td colspan="6" class="text-center">Loading users...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   </div>
 

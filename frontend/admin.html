@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Admin Console — WhatsApp AI Bot</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="admin-body">
+  <header class="topbar admin-topbar">
+    <div class="topbar-inner">
+      <div class="identity">
+        <h1 class="brand">Admin Console</h1>
+        <span class="subtitle">Multi-Tenant Management</span>
+      </div>
+      <div class="topbar-meta">
+        <a class="nav-link" href="index.html">&larr; Back to Dashboard</a>
+        <button id="adminLogoutBtn" class="nav-btn" type="button">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page admin-page">
+    <div class="admin-container">
+      <div class="admin-header-row">
+        <div>
+          <h2 class="section-heading">Tenant Accounts</h2>
+          <p class="section-subheading">Manage users, bot session lifecycle, and provider configurations.</p>
+        </div>
+        <button id="toggleAddUserBtn" class="button-primary" type="button">+ Create User</button>
+      </div>
+
+      <!-- Add User Form Container -->
+      <div id="addUserBox" class="admin-card" hidden>
+        <h3 class="card-heading">Create New Tenant User</h3>
+        <form id="createUserForm" class="admin-form">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="newUsername">Username</label>
+              <input id="newUsername" type="text" required autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label for="newPassword">Password</label>
+              <input id="newPassword" type="password" required autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label for="newRole">Role</label>
+              <select id="newRole" class="form-select">
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="newOwnerNumber">Owner Phone (International digits)</label>
+              <input id="newOwnerNumber" type="text" placeholder="e.g. 923001234567">
+            </div>
+            <div class="form-group">
+              <label for="newProvider">Provider</label>
+              <select id="newProvider" class="form-select">
+                <option value="nvidia">NVIDIA</option>
+                <option value="groq">Groq</option>
+                <option value="auto">Auto (Failover)</option>
+              </select>
+            </div>
+          </div>
+          <div id="createUserError" class="form-error" hidden></div>
+          <div class="form-actions">
+            <button class="button-primary" type="submit">Create Account</button>
+            <button id="cancelCreateUserBtn" type="button">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Users Table -->
+      <div class="admin-card">
+        <div class="table-wrap">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Account</th>
+                <th>WhatsApp Bot</th>
+                <th>Messages</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <tr>
+                <td colspan="6" class="table-loading">Loading users...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="admin.js"></script>
+</body>
+</html>

@@ -58,9 +58,8 @@ jobs:
               cd "$HOME/www" && npm install --omit=dev 2>/dev/null || true
             fi
 
-            echo "🔄 Triggering Node.js process reload..."
-            mkdir -p tmp
-            touch tmp/restart.txt 2>/dev/null || true
-            pkill -f "node.*src/index.js" 2>/dev/null || pkill -f "node.*src/server.js" 2>/dev/null || true
+            echo "🔄 Triggering Alwaysdata process reload..."
+            mkdir -p "$TARGET_DIR/tmp" "$HOME/www/tmp" 2>/dev/null || true
+            touch "$TARGET_DIR/tmp/restart.txt" "$HOME/www/tmp/restart.txt" 2>/dev/null || true
 
             echo "✅ Deployment to Alwaysdata finished successfully!"

@@ -1,0 +1,41 @@
+name: Deploy to Alwaysdata & Cloudflare
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-alwaysdata:
+    name: Deploy to Alwaysdata Runtime
+    runs-on: ubuntu-latest
+    steps:
+      - name: Execute Remote SSH Commands
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ALWAYSDATA_SSH_HOST }}
+          username: ${{ secrets.ALWAYSDATA_SSH_USER }}
+          password: ${{ secrets.ALWAYSDATA_SSH_PASSWORD }}
+          key: ${{ secrets.ALWAYSDATA_SSH_KEY }}
+          port: 22
+          script: |
+            echo "🚀 Navigating to project directory..."
+            if [ -d "$HOME/whatsapp-bot-main" ]; then
+              cd $HOME/whatsapp-bot-main
+            elif [ -d "$HOME/www" ]; then
+              cd $HOME/www
+            else
+              cd $HOME
+            fi
+
+            echo "📥 Pulling latest changes from GitHub..."
+            git pull origin main
+
+            echo "📦 Installing dependencies..."
+            npm install --production
+
+            echo "🔄 Restarting Node.js process..."
+            # Trigger process reload
+            pkill -u $USER -f "node.*server" || pkill -u $USER -f "node.*index" || true
+            touch tmp/restart.txt 2>/dev/null || true
+            echo "✅ Deployment to Alwaysdata completed successfully!"

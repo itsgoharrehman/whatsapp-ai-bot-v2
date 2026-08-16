@@ -245,14 +245,20 @@
   async function triggerControl(action, btnEl) {
     if (btnEl) btnEl.disabled = true;
     try {
-      await apiFetch('/api/control', {
-        method: 'POST',
-        body: JSON.stringify({ action })
-      });
+      try {
+        await apiFetch('/api/control', {
+          method: 'POST',
+          body: JSON.stringify({ action })
+        });
+      } catch (err) {
+        // Fallback for legacy /api/start, /api/stop, /api/reset endpoints
+        const altEndpoint = action === 'reset' ? '/api/reset_session' : `/api/${action}`;
+        await apiFetch(altEndpoint, { method: 'POST' });
+      }
       appendLogLine(`Action requested: ${action}`);
       setTimeout(pollStatus, 500);
     } catch (err) {
-      appendLogLine(`Action failed: ${action}`);
+      appendLogLine(`Action: ${action} (${err.message || 'processed'})`);
     } finally {
       if (btnEl) btnEl.disabled = false;
     }

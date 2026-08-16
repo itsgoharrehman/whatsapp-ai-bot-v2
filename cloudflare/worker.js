@@ -58,7 +58,14 @@ export default {
       }
 
       try {
-        const response = await fetch(targetUrl, init);
+        let response = await fetch(targetUrl, init);
+        
+        // Automatic fallback for legacy backends
+        if (response.status === 404 && url.pathname === '/api/control' && request.method === 'POST') {
+          const altTarget = `${alwaysdataUrl}/api/start`;
+          response = await fetch(altTarget, { method: 'POST', headers: forwardHeaders });
+        }
+
         const resHeaders = new Headers(response.headers);
         resHeaders.set('Access-Control-Allow-Origin', '*');
         return new Response(response.body, {

@@ -162,8 +162,8 @@
       const isConnected = data.connected === true || data.status === 'CONNECTED';
       const isQrReady = Boolean(data.qr_code || data.qr || data.qrCodeDataUrl);
 
-      // Fast poll (1.5s) while generating QR code, standard 3s when idle/connected
-      const nextDelay = (!isConnected && !isQrReady) ? 1500 : 3000;
+      // Ultra-fast 1s polling while connecting / awaiting pairing, 3s once connected
+      const nextDelay = !isConnected ? 1000 : 3000;
       if (statusInterval) clearTimeout(statusInterval);
       statusInterval = setTimeout(pollStatus, nextDelay);
     } catch (_) {

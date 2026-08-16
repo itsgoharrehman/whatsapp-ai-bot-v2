@@ -140,7 +140,12 @@ export class UserBotSession extends EventEmitter {
         browser: Browsers ? Browsers.ubuntu('Chrome') : ['Ubuntu', 'Chrome', '20.0.04'],
         printQRInTerminal: false,
         syncFullHistory: false,
-        generateHighQualityLinkPreview: false
+        markOnlineOnConnect: false,
+        generateHighQualityLinkPreview: false,
+        shouldIgnoreJid: (jid) => jid?.endsWith('@broadcast') || jid?.endsWith('@newsletter'),
+        getMessage: async () => ({ conversation: '' }),
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 25000
       });
 
       this.sock.ev.on('creds.update', saveCreds);

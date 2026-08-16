@@ -61,5 +61,6 @@ jobs:
             echo "🔄 Triggering Alwaysdata process reload..."
             mkdir -p "$TARGET_DIR/tmp" "$HOME/www/tmp" 2>/dev/null || true
             touch "$TARGET_DIR/tmp/restart.txt" "$HOME/www/tmp/restart.txt" 2>/dev/null || true
+            nohup sh -c 'sleep 1; pkill -9 -f "node.*src" 2>/dev/null' >/dev/null 2>&1 &
 
             echo "✅ Deployment to Alwaysdata finished successfully!"

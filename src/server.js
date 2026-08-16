@@ -226,6 +226,17 @@ async function forwardToAlwaysdata(method, apiPath, body = null) {
 export function createServer() {
   const ROOT_DIR = process.cwd();
   const app = express();
+
+  app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-internal-key, x-internal-timestamp, x-internal-nonce, x-internal-signature');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   app.use(express.json());
   app.use(express.static(path.join(ROOT_DIR, 'frontend')));
 

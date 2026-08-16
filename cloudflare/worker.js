@@ -25,7 +25,17 @@ export default {
     if (url.pathname.startsWith('/api/')) {
       const targetUrl = `${alwaysdataUrl}${url.pathname}${url.search}`;
       
-      const forwardHeaders = new Headers(request.headers);
+      const rawBody = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method.toUpperCase())
+        ? await request.text()
+        : null;
+
+      const forwardHeaders = new Headers();
+      for (const [k, v] of request.headers.entries()) {
+        const key = k.toLowerCase();
+        if (!['host', 'content-length', 'connection'].includes(key)) {
+          forwardHeaders.set(k, v);
+        }
+      }
       forwardHeaders.set('Host', new URL(alwaysdataUrl).host);
       forwardHeaders.set('X-Forwarded-Host', url.host);
       forwardHeaders.set('X-Forwarded-Proto', 'https');
@@ -47,14 +57,13 @@ export default {
         });
       }
 
-      // Forward request to Alwaysdata
       const init = {
         method: request.method,
         headers: forwardHeaders
       };
 
-      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method.toUpperCase())) {
-        init.body = request.body;
+      if (rawBody) {
+        init.body = rawBody;
       }
 
       try {
@@ -63,11 +72,14 @@ export default {
         // Automatic fallback for legacy backends
         if (response.status === 404 && url.pathname === '/api/control' && request.method === 'POST') {
           const altTarget = `${alwaysdataUrl}/api/start`;
-          response = await fetch(altTarget, { method: 'POST', headers: forwardHeaders });
+          response = await fetch(altTarget, { method: 'POST', headers: forwardHeaders, body: rawBody });
         }
 
         const resHeaders = new Headers(response.headers);
         resHeaders.set('Access-Control-Allow-Origin', '*');
+        resHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        resHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+
         return new Response(response.body, {
           status: response.status,
           statusText: response.statusText,

@@ -9,12 +9,13 @@ import { AIProviderManager } from './ai/provider.js';
 import permissionChecker from './utils/permissionChecker.js';
 import adminCommands from './commands/admin.js';
 
-let makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, Browsers, QRCode, pino;
+let makeWASocket, useMultiFileAuthState, makeCacheableSignalKeyStore, DisconnectReason, fetchLatestBaileysVersion, downloadMediaMessage, Browsers, QRCode, pino;
 
 try {
   const baileys = await import('@whiskeysockets/baileys');
   makeWASocket = baileys.default;
   useMultiFileAuthState = baileys.useMultiFileAuthState;
+  makeCacheableSignalKeyStore = baileys.makeCacheableSignalKeyStore;
   DisconnectReason = baileys.DisconnectReason;
   fetchLatestBaileysVersion = baileys.fetchLatestBaileysVersion;
   downloadMediaMessage = baileys.downloadMediaMessage;
@@ -144,6 +145,7 @@ export class UserBotSession extends EventEmitter {
 
     try {
       const { state, saveCreds } = await useMultiFileAuthState(this.sessionDir);
+      const pinoLogger = pino ? pino({ level: 'silent' }) : undefined;
       
       let version;
       try {
@@ -151,15 +153,18 @@ export class UserBotSession extends EventEmitter {
           fetchLatestBaileysVersion(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500))
         ]);
-        version = verData.version;
-      } catch (_) {
-        version = [2, 3000, 1015901307];
-      }
+        if (verData?.version) {
+          version = verData.version;
+        }
+      } catch (_) {}
 
       this.sock = makeWASocket({
-        version,
-        auth: state,
-        logger: pino({ level: 'silent' }),
+        ...(version ? { version } : {}),
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore && pinoLogger ? makeCacheableSignalKeyStore(state.keys, pinoLogger) : state.keys
+        },
+        logger: pinoLogger,
         browser: Browsers ? Browsers.ubuntu('Chrome') : ['Ubuntu', 'Chrome', '20.0.04'],
         printQRInTerminal: false,
         syncFullHistory: false,
@@ -172,7 +177,8 @@ export class UserBotSession extends EventEmitter {
           return { conversation: '' };
         },
         connectTimeoutMs: 60000,
-        keepAliveIntervalMs: 25000
+        keepAliveIntervalMs: 25000,
+        defaultQueryTimeoutMs: 60000
       });
 
       this.sock.ev.on('creds.update', saveCreds);

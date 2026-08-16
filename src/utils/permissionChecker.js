@@ -3,15 +3,24 @@ import { logger } from './logger.js';
 
 export default {
   unwrapMessage(rawMessage) {
-    if (!rawMessage || !rawMessage.message) return null;
-    let message = rawMessage.message;
+    if (!rawMessage) return null;
+    let message = rawMessage.message ? rawMessage.message : rawMessage;
 
-    if (message.ephemeralMessage) message = message.ephemeralMessage.message;
-    if (message.viewOnceMessage) message = message.viewOnceMessage.message;
-    if (message.viewOnceMessageV2) message = message.viewOnceMessageV2.message;
-    if (message.documentWithCaptionMessage) message = message.documentWithCaptionMessage.message;
-    if (message.editedMessage) message = message.editedMessage.message?.protocolMessage?.editedMessage || message;
-
+    while (message) {
+      if (message.ephemeralMessage?.message) {
+        message = message.ephemeralMessage.message;
+      } else if (message.viewOnceMessage?.message) {
+        message = message.viewOnceMessage.message;
+      } else if (message.viewOnceMessageV2?.message) {
+        message = message.viewOnceMessageV2.message;
+      } else if (message.documentWithCaptionMessage?.message) {
+        message = message.documentWithCaptionMessage.message;
+      } else if (message.editedMessage?.message?.protocolMessage?.editedMessage) {
+        message = message.editedMessage.message.protocolMessage.editedMessage;
+      } else {
+        break;
+      }
+    }
     return message;
   },
 

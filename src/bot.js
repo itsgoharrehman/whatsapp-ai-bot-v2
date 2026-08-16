@@ -61,6 +61,27 @@ export class BoundedTtlSet {
   }
 }
 
+export class MessageStore {
+  constructor(maxSize = 2000) {
+    this.maxSize = maxSize;
+    this.messages = new Map();
+  }
+
+  set(key, message) {
+    if (!key?.id || !message) return;
+    this.messages.set(key.id, message);
+    if (this.messages.size > this.maxSize) {
+      const firstKey = this.messages.keys().next().value;
+      this.messages.delete(firstKey);
+    }
+  }
+
+  get(key) {
+    if (!key?.id) return null;
+    return this.messages.get(key.id) || null;
+  }
+}
+
 export class UserBotSession extends EventEmitter {
   constructor(userId) {
     super();
@@ -75,6 +96,8 @@ export class UserBotSession extends EventEmitter {
     this.isStarting = false;
     this.sentBotMsgIds = new BoundedTtlSet(2000, 30 * 60 * 1000);
     this.processedInboundMsgIds = new BoundedTtlSet(2000, 15 * 60 * 1000);
+    this.messageStore = new MessageStore(2000);
+    this.msgRetryCounterCache = new Map();
     this.reconnectTimer = null;
     this.antiBan = new AntiBanManager(this.userId);
     this.aiProvider = new AIProviderManager(this.userId);
@@ -140,10 +163,14 @@ export class UserBotSession extends EventEmitter {
         browser: Browsers ? Browsers.ubuntu('Chrome') : ['Ubuntu', 'Chrome', '20.0.04'],
         printQRInTerminal: false,
         syncFullHistory: false,
-        markOnlineOnConnect: false,
+        markOnlineOnConnect: true,
         generateHighQualityLinkPreview: false,
-        shouldIgnoreJid: (jid) => jid?.endsWith('@broadcast') || jid?.endsWith('@newsletter'),
-        getMessage: async () => ({ conversation: '' }),
+        msgRetryCounterCache: this.msgRetryCounterCache,
+        getMessage: async (key) => {
+          const msg = this.messageStore.get(key);
+          if (msg) return msg;
+          return { conversation: '' };
+        },
         connectTimeoutMs: 60000,
         keepAliveIntervalMs: 25000
       });
@@ -199,6 +226,9 @@ export class UserBotSession extends EventEmitter {
       this.sock.ev.on('messages.upsert', async (m) => {
         if (m.type !== 'notify') return;
         for (const msg of m.messages) {
+          if (msg.key && msg.message) {
+            this.messageStore.set(msg.key, msg.message);
+          }
           await this.handleIncomingMessage(msg);
         }
       });
@@ -219,7 +249,9 @@ export class UserBotSession extends EventEmitter {
       this.reconnectTimer = null;
     }
     if (this.sock) {
-      try { await this.sock.end(); } catch (err) {}
+      try {
+        await this.sock.end();
+      } catch (err) {}
       this.sock = null;
     }
     this.status = 'DISCONNECTED';
@@ -249,6 +281,9 @@ export class UserBotSession extends EventEmitter {
       const res = await this.sock.sendMessage(chatJid, content, options);
       if (res?.key?.id) {
         this.sentBotMsgIds.add(res.key.id);
+        if (res.message) {
+          this.messageStore.set(res.key, res.message);
+        }
       }
       return true;
     } catch (err) {

@@ -306,6 +306,11 @@ export function createServer() {
     res.json(logger.getHistory(req.params.userId));
   });
 
+  app.post('/internal/logs/:userId/clear', internalAuthMiddleware, (req, res) => {
+    logger.clearHistory(req.params.userId);
+    res.json({ success: true });
+  });
+
   app.get('/internal/logs/stream/:userId', internalAuthMiddleware, (req, res) => {
     const { userId } = req.params;
     res.setHeader('Content-Type', 'text/event-stream');
@@ -317,7 +322,7 @@ export function createServer() {
     res.write(`data: ${JSON.stringify({ type: 'history', logs: logger.getHistory(userId) })}\n\n`);
 
     const logHandler = (logEntry) => {
-      if (logEntry.userId === userId || logEntry.userId === null) {
+      if (logEntry.userId === userId) {
         res.write(`data: ${JSON.stringify({ type: 'log', log: logEntry })}\n\n`);
       }
     };
@@ -421,10 +426,10 @@ export function createServer() {
       autoReply: st.autoReply,
       active_key_index: st.keyIndices ? (st.keyIndices.nvidia || st.keyIndices.groq || 0) : 0,
       key_index: st.keyIndices ? (st.keyIndices.nvidia || st.keyIndices.groq || 0) : 0,
-      messages_processed: st.analytics ? st.analytics.totalProcessed : 0,
-      total_messages: st.analytics ? st.analytics.totalProcessed : 0,
-      ai_replies: st.analytics ? st.analytics.totalReplies : 0,
-      total_replies: st.analytics ? st.analytics.totalReplies : 0,
+      messages_processed: st.analytics ? (st.analytics.totalMessagesProcessed ?? st.analytics.totalProcessed ?? 0) : 0,
+      total_messages: st.analytics ? (st.analytics.totalMessagesProcessed ?? st.analytics.totalProcessed ?? 0) : 0,
+      ai_replies: st.analytics ? (st.analytics.totalRepliesSent ?? st.analytics.totalReplies ?? 0) : 0,
+      total_replies: st.analytics ? (st.analytics.totalRepliesSent ?? st.analytics.totalReplies ?? 0) : 0,
       environment: 'Production',
       env: 'Production'
     });
@@ -457,6 +462,16 @@ export function createServer() {
     res.json(normalized);
   });
 
+  app.post('/api/logs/clear', requireAuth, async (req, res) => {
+    if (config.alwaysdataBaseUrl) {
+      try {
+        await forwardToAlwaysdata('POST', `/internal/logs/${req.user.id}/clear`);
+      } catch (_) {}
+    }
+    logger.clearHistory(req.user.id);
+    res.json({ success: true });
+  });
+
   app.get('/api/logs/stream', requireAuth, (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -468,7 +483,7 @@ export function createServer() {
     res.write(`data: ${JSON.stringify({ type: 'history', logs: history })}\n\n`);
 
     const logHandler = (logEntry) => {
-      if (logEntry.userId === req.user.id || logEntry.userId === null) {
+      if (logEntry.userId === req.user.id) {
         res.write(`data: ${JSON.stringify({ type: 'log', log: logEntry })}\n\n`);
       }
     };
@@ -490,6 +505,7 @@ export function createServer() {
     } else if (action === 'stop') {
       await sessionManager.stopSession(userId);
     } else if (action === 'reset' || action === 'reset_session') {
+      logger.clearHistory(userId);
       logger.forUser(userId).warn('Dashboard: Initiated Session Reset & QR Re-generation');
       await sessionManager.resetSession(userId);
       setTimeout(() => sessionManager.startSession(userId, true), 1000);

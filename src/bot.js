@@ -387,6 +387,7 @@ export class UserBotSession extends EventEmitter {
       if (!db.getAutoReply(this.userId)) return;
       if (!this.antiBan.checkRateLimit(chatJid)) return;
 
+      db.incrementAnalytics(this.userId, 'totalMessagesProcessed');
       this.userLogger.info(`[INPUT] Source: ${isGroup ? 'GROUP' : 'DM'} (${chatJid}) | Sender: ${senderLabel} (${senderJid || 'me'}) | Prompt: "${messageText.substring(0, 100)}"${hasMedia ? ` [Media: ${mediaType}]` : ''}`);
 
       const history = db.getConversationHistory(this.userId, chatJid);
@@ -440,6 +441,7 @@ export class UserBotSession extends EventEmitter {
         if (sent) {
           db.addMessage(this.userId, chatJid, 'user', messageText, senderJid, isOwner);
           db.addMessage(this.userId, chatJid, 'assistant', validatedReply, this.botJid, false);
+          db.incrementAnalytics(this.userId, 'totalRepliesSent');
           this.antiBan.recordReply(chatJid);
           this.userLogger.info(`[DISPATCH] Target: ${chatJid} | Status: DELIVERED`);
         }

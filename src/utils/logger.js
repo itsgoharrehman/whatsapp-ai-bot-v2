@@ -67,7 +67,15 @@ class LiveLogger extends EventEmitter {
     if (!userId || userId === 'all') {
       return this.logsHistory;
     }
-    return this.logsHistory.filter(l => l.userId === userId || l.userId === null);
+    return this.logsHistory.filter(l => l.userId === userId);
+  }
+
+  clearHistory(userId = null) {
+    if (!userId || userId === 'all') {
+      this.logsHistory = [];
+    } else {
+      this.logsHistory = this.logsHistory.filter(l => l.userId !== userId);
+    }
   }
 
   forUser(userId) {
@@ -75,7 +83,8 @@ class LiveLogger extends EventEmitter {
       info: (msg, details) => this.info(msg, details, userId),
       warn: (msg, details) => this.warn(msg, details, userId),
       error: (msg, details) => this.error(msg, details, userId),
-      success: (msg, details) => this.success(msg, details, userId)
+      success: (msg, details) => this.success(msg, details, userId),
+      clear: () => this.clearHistory(userId)
     };
   }
 }

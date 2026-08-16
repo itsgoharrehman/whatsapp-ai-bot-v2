@@ -465,15 +465,24 @@
 
     if (dom.btnStart) dom.btnStart.addEventListener('click', () => triggerControl('start', dom.btnStart));
     if (dom.btnStop) dom.btnStop.addEventListener('click', () => triggerControl('stop', dom.btnStop));
-    if (dom.btnNewSession) dom.btnNewSession.addEventListener('click', () => triggerControl('reset_session', dom.btnNewSession));
+    if (dom.btnNewSession) dom.btnNewSession.addEventListener('click', () => {
+      if (dom.logStream) dom.logStream.innerHTML = '';
+      lastLogOffset = 0;
+      triggerControl('reset_session', dom.btnNewSession);
+    });
 
     if (dom.btnStopSession) dom.btnStopSession.addEventListener('click', () => triggerControl('stop', dom.btnStopSession));
-    if (dom.btnResetPair) dom.btnResetPair.addEventListener('click', () => triggerControl('reset_session', dom.btnResetPair));
+    if (dom.btnResetPair) dom.btnResetPair.addEventListener('click', () => {
+      if (dom.logStream) dom.logStream.innerHTML = '';
+      lastLogOffset = 0;
+      triggerControl('reset_session', dom.btnResetPair);
+    });
 
     if (dom.btnClearLogs) {
-      dom.btnClearLogs.addEventListener('click', () => {
+      dom.btnClearLogs.addEventListener('click', async () => {
         if (dom.logStream) dom.logStream.innerHTML = '';
         lastLogOffset = 0;
+        await apiFetch('/api/logs/clear', { method: 'POST' }).catch(() => {});
       });
     }
 
